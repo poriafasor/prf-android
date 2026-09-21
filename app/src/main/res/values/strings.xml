@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PRF Security</string>
+    <string name="app_subtitle">Enterprise Device Check-in</string>
+
+    <string name="status_unknown">Not checked in yet</string>
+    <string name="status_idle">Ready</string>
+    <string name="status_capturing">Capturing photos… (%1$d / %2$d)</string>
+    <string name="status_sending">Sending to database…</string>
+    <string name="status_done">Check-in complete</string>
+    <string name="status_queued">Saved offline - will sync when online (%1$d pending)</string>
+    <string name="status_declined">Check-in recorded without photos</string>
+    <string name="status_error">Check-in failed: %1$s</string>
+
+    <string name="btn_checkin">Check in now</string>
+    <string name="btn_settings">Settings</string>
+    <string name="btn_yes">Yes, take photos</string>
+    <string name="btn_no">No, skip photos</string>
+    <string name="btn_retry">Retry</string>
+
+    <string name="consent_title">Photo check-in</string>
+    <string name="consent_body">Your company check-in needs 6 photos: 3 from the front camera and 3 from the back camera, plus your device information. Nothing is captured until you press Yes. Your answer is recorded either way.</string>
+    <string name="capture_hint_front">Front camera - photo %1$d of 3</string>
+    <string name="capture_hint_back">Rear camera - photo %1$d of 3</string>
+    <string name="capture_done">Capture complete</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_sync_header">Database sync</string>
+    <string name="settings_token">GitHub sync token</string>
+    <string name="settings_token_hint">github_pat_… - stored encrypted on this device</string>
+    <string name="settings_owner">GitHub account</string>
+    <string name="settings_repo">Database repository</string>
+    <string name="settings_save">Save settings</string>
+    <string name="settings_test">Test connection</string>
+    <string name="settings_test_ok">Connected. Repository is writable.</string>
+    <string name="settings_test_fail">Connection failed: %1$s</string>
+
+    <string name="notif_channel_id">prf_checkin</string>
+    <string name="notif_channel_name">Daily check-in reminder</string>
+    <string name="notif_title">Check-in due</string>
+    <string name="notif_body">Open PRF Security and run your daily check-in.</string>
+
+    <string name="err_no_camera">No camera available on this device</string>
+    <string name="err_no_token">Sync is not configured. Open Settings and enter the sync token.</string>
+    <string name="err_capture">Camera failed: %1$s</string>
+</resources>

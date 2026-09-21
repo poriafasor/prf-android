@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="prf_bg">#101418</color>
+    <color name="prf_surface">#1A2027</color>
+    <color name="prf_surface_hi">#232C36</color>
+    <color name="prf_text">#E8EDF2</color>
+    <color name="prf_text_dim">#9AA7B4</color>
+    <color name="prf_accent">#2E7DFF</color>
+    <color name="prf_ok">#35C48D</color>
+    <color name="prf_warn">#F0A02F</color>
+    <color name="prf_bad">#F2654A</color>
+</resources>

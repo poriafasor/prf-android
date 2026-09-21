@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="queue_pending">
+        <item quantity="one">%d upload queued</item>
+        <item quantity="other">%d uploads queued</item>
+    </plurals>
+</resources>

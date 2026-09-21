@@ -1,0 +1,2 @@
+-keep class com.prf.security.data.** { *; }
+-keepclassmembers class * { @kotlinx.serialization.SerialName <fields>; }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.PRF" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/prf_accent</item>
+        <item name="colorPrimaryVariant">@color/prf_accent</item>
+        <item name="colorOnPrimary">@android:color/white</item>
+        <item name="colorSecondary">@color/prf_ok</item>
+        <item name="colorOnSecondary">@android:color/black</item>
+        <item name="android:colorBackground">@color/prf_bg</item>
+        <item name="colorSurface">@color/prf_surface</item>
+        <item name="colorOnSurface">@color/prf_text</item>
+        <item name="android:statusBarColor" tools:targetApi="l">@color/prf_bg</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+    </style>
+</resources>
