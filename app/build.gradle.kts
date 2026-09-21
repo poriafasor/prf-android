@@ -23,7 +23,7 @@ android {
     // real upload keystore before going to production.
     signingConfigs {
         getByName("release") {
-            storeFile = rootProject.layout.projectDirectory.file("debug.keystore")
+            storeFile = java.io.File(rootProject.projectDir, "debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
