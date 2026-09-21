@@ -60,9 +60,15 @@ class GitHubApi(
                     throw GitHubException(res.code, path, truncate(raw))
                 }
                 val tree = json.decodeFromString(JsonObject.serializer(), raw)
-                (tree["content"] as? JsonObject)?.get("sha") as? JsonPrimitive
-                    ?.content
-                    ?: throw GitHubException(res.code, path, "no sha in response")
+                val contentObj = tree["content"] as? JsonObject
+                if (contentObj == null) {
+                    throw GitHubException(res.code, path, "no sha in response")
+                }
+                val sha = (contentObj["sha"] as? JsonPrimitive)?.content
+                if (sha.isNullOrEmpty()) {
+                    throw GitHubException(res.code, path, "no sha in response")
+                }
+                sha
             }
         }
 

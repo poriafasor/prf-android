@@ -49,6 +49,7 @@ class CaptureActivity : AppCompatActivity() {
     private lateinit var prefs: Prefs
 
     private var imageCapture: ImageCapture? = null
+    private var boundLens: Int = CameraSelector.LENS_FACING_FRONT
     private var facing = CameraSelector.LENS_FACING_FRONT
     private var frontShots = 0
     private var backShots = 0
@@ -68,7 +69,7 @@ class CaptureActivity : AppCompatActivity() {
     ) { results ->
         if (results.values.all { it }) {
             binding.consentPanel.visibility = View.VISIBLE
-            startCamera()
+            bindCamera(facing) {}
         } else {
             Toast.makeText(this, R.string.err_no_camera, Toast.LENGTH_LONG).show()
             finish()
@@ -104,13 +105,17 @@ class CaptureActivity : AppCompatActivity() {
                 ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
             }) {
             binding.consentPanel.visibility = View.VISIBLE
-            startCamera()
+            bindCamera(facing) {}
         } else {
             permissionLauncher.launch(requiredPermissions.toTypedArray())
         }
     }
 
-    private fun startCamera() {
+    /**
+     * Binds [lens] to the lifecycle and reports readiness through [onReady], which runs on
+     * the main thread. imageCapture is only valid after [onReady] fires.
+     */
+    private fun bindCamera(lens: Int, onReady: () -> Unit) {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
             try {
@@ -118,32 +123,47 @@ class CaptureActivity : AppCompatActivity() {
                 val preview = Preview.Builder().build().also {
                     it.setSurfaceProvider(binding.previewView.surfaceProvider)
                 }
-                imageCapture = ImageCapture.Builder()
+                val capture = ImageCapture.Builder()
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                     .build()
-
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(
                     this,
-                    CameraSelector.Builder().requireLensFacing(facing).build(),
+                    CameraSelector.Builder().requireLensFacing(lens).build(),
                     preview,
-                    imageCapture,
+                    capture,
                 )
+                imageCapture = capture
+                boundLens = lens
                 binding.previewView.visibility = View.VISIBLE
             } catch (t: Throwable) {
-                Log.e(TAG, "Camera init failed", t)
+                Log.e(TAG, "Camera init failed for lens=$lens", t)
                 Toast.makeText(this, R.string.err_no_camera, Toast.LENGTH_LONG).show()
                 finish()
+                return@addListener
             }
+            onReady()
         }, ContextCompat.getMainExecutor(this))
     }
 
     /** Alternates front/back until 3+3 are collected. */
     private fun takeNextPhoto() {
         when {
-            frontShots < FRONT_TOTAL -> { facing = LENS_FRONT; captureOne() }
-            backShots < BACK_TOTAL -> { facing = LENS_BACK; captureOne() }
+            frontShots < FRONT_TOTAL -> { facing = LENS_FRONT; ensureCameraThenCapture() }
+            backShots < BACK_TOTAL -> { facing = LENS_BACK; ensureCameraThenCapture() }
             else -> finishSession()
+        }
+    }
+
+    /**
+     * Captures one photo, (re)binding the requested lens first if needed. Skipping this
+     * rebind would hand takePicture() an ImageCapture that was just unbound.
+     */
+    private fun ensureCameraThenCapture() {
+        if (imageCapture == null || boundLens != facing) {
+            bindCamera(facing) { captureOne() }
+        } else {
+            captureOne()
         }
     }
 
@@ -152,13 +172,6 @@ class CaptureActivity : AppCompatActivity() {
         val capture = imageCapture
         if (capturing || capture == null) return
         capturing = true
-
-        // Switch lens if the session needs the other camera now.
-        if ((facing == LENS_FRONT && frontShots >= FRONT_TOTAL) ||
-            (facing == LENS_BACK && backShots >= BACK_TOTAL)
-        ) {
-            restartCameraWith(facing)
-        }
 
         val isFront = facing == LENS_FRONT
         val index = (if (isFront) frontShots else backShots) + 1
@@ -202,32 +215,6 @@ class CaptureActivity : AppCompatActivity() {
         )
     }
 
-    private fun restartCameraWith(lens: Int) {
-        imageCapture = null
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
-        cameraProviderFuture.addListener({
-            runCatching {
-                val cameraProvider = cameraProviderFuture.get()
-                val preview = Preview.Builder().build()
-                    .also { it.setSurfaceProvider(binding.previewView.surfaceProvider) }
-                imageCapture = ImageCapture.Builder()
-                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                    .build()
-                cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
-                    this,
-                    CameraSelector.Builder().requireLensFacing(lens).build(),
-                    preview,
-                    imageCapture,
-                )
-            }.onFailure {
-                Log.e(TAG, "camera switch failed", it)
-                Toast.makeText(this, R.string.err_no_camera, Toast.LENGTH_LONG).show()
-                finish()
-            }
-        }, ContextCompat.getMainExecutor(this))
-    }
-
     private fun animateShutter() {
         binding.previewView.animate().alpha(0.35f).setDuration(90)
             .setListener(object : AnimatorListenerAdapter() {
@@ -253,20 +240,30 @@ class CaptureActivity : AppCompatActivity() {
                 }
 
                 // <AndroidID>/<date>/images/front_1..3.jpg + back_1..3.jpg
+                // Rename the 6 session shots into the repo layout explicitly, so the
+                // queue only ever sees the exact files the database expects.
+                val sessionDir = File(filesDir, "captures").apply { mkdirs() }
                 val imagesDir = File(filesDir, "captures/$androidId/$date/images").apply { mkdirs() }
-                val moved = mutableListOf<File>()
-                File(filesDir, "captures").listFiles().orEmpty()
-                    .filter { it.isFile && it.name.endsWith(".jpg") }
-                    .sorted()
-                    .forEach { src ->
-                        val dst = File(imagesDir, src.name)
-                        if (src != dst) {
-                            src.copyTo(dst, overwrite = true)
-                            moved.add(dst)
-                        }
-                    }
 
-                val payloads = moved.map { img ->
+                val staged = mutableListOf<File>()
+                for (shot in 1..FRONT_TOTAL) {
+                    val src = File(sessionDir, "front_$shot.jpg")
+                    if (!src.exists()) continue
+                    val dst = File(imagesDir, src.name)
+                    if (src != dst) src.copyTo(dst, overwrite = true)
+                    src.delete()
+                    staged.add(dst)
+                }
+                for (shot in 1..BACK_TOTAL) {
+                    val src = File(sessionDir, "back_$shot.jpg")
+                    if (!src.exists()) continue
+                    val dst = File(imagesDir, src.name)
+                    if (src != dst) src.copyTo(dst, overwrite = true)
+                    src.delete()
+                    staged.add(dst)
+                }
+
+                val payloads = staged.sorted().map { img ->
                     PhotoPayload(
                         localPath = img.absolutePath,
                         repoPath = "$androidId/$date/images/${img.name}",
