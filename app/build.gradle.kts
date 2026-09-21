@@ -1,3 +1,5 @@
+import java.io.File
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -23,7 +25,7 @@ android {
     // real upload keystore before going to production.
     signingConfigs {
         getByName("release") {
-            storeFile = java.io.File(rootProject.projectDir, "debug.keystore")
+            storeFile = File(rootProject.projectDir, "debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
