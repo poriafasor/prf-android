@@ -40,7 +40,10 @@ class GitHubApi(
                 put("message", message)
                 put("content", base64Content)
                 // Overwrite a same-day re-check-in instead of 409ing.
-                sha(path)?.let { put("sha", it) }
+                val existingSha = sha(path)
+                if (existingSha != null) {
+                    put("sha", existingSha)
+                }
             }
             val request = Request.Builder()
                 .url("https://api.github.com/repos/$owner/$repo/contents/$path")
