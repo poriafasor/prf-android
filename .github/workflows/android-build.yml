@@ -5,6 +5,8 @@ on:
     branches: [ main ]
     paths:
       - 'app/**'
+      - 'gradlew'
+      - 'gradle/**'
       - 'build.gradle.kts'
       - 'settings.gradle.kts'
       - 'gradle.properties'
