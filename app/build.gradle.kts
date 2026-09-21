@@ -24,7 +24,7 @@ android {
     // so the build is reproducible and the artifact always installs. Replace with a
     // real upload keystore before going to production.
     signingConfigs {
-        getByName("release") {
+        create("release") {
             storeFile = File(rootProject.projectDir, "debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
