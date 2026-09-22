@@ -33,7 +33,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             return Result.retry()
         }
 
-        // Registration files (Numbers/*.txt) are independent of any check-in and must be
+        // Registration files (Numbers directory) are independent of any check-in and must be
         // pushed even when nothing else is queued.
         uploadNumbers(api)
 
@@ -56,7 +56,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     }
 
     /**
-     * Pushes every staged Numbers/*.txt registration file, including the numbered
+     * Pushes every staged Numbers directory registration file, including the numbered
      * Edit Phone Number N.txt history files that each phone correction produces.
      */
     private suspend fun uploadNumbers(api: GitHubApi) {
@@ -89,7 +89,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                 )
             }
 
-            // 2) <AndroidID>/<date>/images/*.jpg
+            // 2) <AndroidID>/<date>/images folder
             for (photo in checkIn.photos) {
                 val file = File(photo.localPath)
                 if (!file.exists()) continue
