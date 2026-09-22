@@ -57,7 +57,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
     /**
      * Pushes every staged Numbers/*.txt registration file, including the numbered
-     * "Edit Phone Number N.txt" history files that each phone correction produces.
+     * Edit Phone Number N.txt history files that each phone correction produces.
      */
     private suspend fun uploadNumbers(api: GitHubApi) {
         val dir = File(applicationContext.filesDir, "Numbers")
@@ -124,5 +124,4 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         private const val TAG = "SyncWorker"
         const val WORK_NAME = "prf_sync_queue"
     }
-}
 }
