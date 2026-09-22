@@ -32,10 +32,14 @@ class MainActivity : AppCompatActivity() {
 
         binding.deviceIdText.text = DeviceCollector.getAndroidId(applicationContext)
 
+        // The HTML portal is the front door of the app: phone registration, operator
+        // selection, voice attendance, photo check-in and settings all start there, so the
+        // launcher hands the user straight to it and keeps this screen as a fallback host
+        // for the native status/pending-queue summary.
+        startActivity(Intent(this, PortalActivity::class.java))
+
         binding.checkinButton.setOnClickListener { showConsentDialog() }
 
-        // The HTML/CSS portal is the main face of the app: phone registration, operator
-        // selection, voice attendance and the settings entry all live there.
         binding.portalButton.setOnClickListener {
             startActivity(Intent(this, PortalActivity::class.java))
         }

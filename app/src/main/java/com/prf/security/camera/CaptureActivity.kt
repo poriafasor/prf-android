@@ -287,6 +287,11 @@ class CaptureActivity : AppCompatActivity() {
                 queueCheckIn(payloads)
                 prefs.lastCheckIn = ts
                 prefs.lastStatus = getString(R.string.status_done)
+                // The HTML portal shows this verbatim, so it must be a readable stamp,
+                // not a raw epoch the user cannot interpret.
+                prefs.lastCheckInLabel = java.text.SimpleDateFormat(
+                    "yyyy-MM-dd HH:mm", java.util.Locale.getDefault()
+                ).format(java.util.Date(ts))
 
                 runOnUiThread {
                     Toast.makeText(this, R.string.capture_done, Toast.LENGTH_LONG).show()

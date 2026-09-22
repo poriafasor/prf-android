@@ -2,212 +2,404 @@
 <html lang="fa" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b1016">
 <title>PRF Security</title>
 <style>
 :root{
-  --bg:#0e1418; --card:#151e24; --card2:#1b262e; --text:#eaf1f5; --dim:#8fa3ad;
-  --accent:#2f7fe0; --accent2:#2159a8; --ok:#2fbf71; --warn:#e0a02f; --err:#e0533f;
-  --line:#24323c; --radius:16px;
+  --bg:#0b1016; --card:#141c24; --card2:#1a242e; --card3:#202c38;
+  --text:#eaf2f8; --dim:#8ba0ad; --dim2:#5f727f;
+  --accent:#2f7fe0; --accent2:#1f5fae; --accent-soft:rgba(47,127,224,.14);
+  --ok:#2fbf71; --ok-soft:rgba(47,191,113,.14);
+  --warn:#e0a02f; --warn-soft:rgba(224,160,47,.14);
+  --err:#e0533f; --err-soft:rgba(224,83,63,.14);
+  --line:#24313d; --line2:#2c3b49;
+  --radius:18px; --radius-s:12px;
+  --shadow:0 8px 28px rgba(0,0,0,.35);
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-html,body{margin:0;padding:0;height:100%;}
-body{background:var(--bg);color:var(--text);font-family:Segoe UI,Tahoma,sans-serif;
-  display:flex;flex-direction:column;align-items:center;padding:20px 16px 32px;gap:16px;}
-.wrap{width:100%;max-width:480px;display:flex;flex-direction:column;gap:16px;}
-header{text-align:center;margin-top:8px;}
-h1{font-size:24px;margin:0 0 6px;letter-spacing:.5px;}
-.sub{color:var(--dim);font-size:13px;margin:0;}
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-  padding:18px;display:flex;flex-direction:column;gap:12px;}
-.card h2{font-size:15px;margin:0;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;font-weight:700;}
-label{font-size:13px;color:var(--dim);}
-input[type=text],select{width:100%;padding:14px 12px;border-radius:12px;border:1px solid var(--line);
-  background:var(--card2);color:var(--text);font-size:16px;outline:none;}
-input[type=text]:focus,select:focus{border-color:var(--accent);}
-.btn{width:100%;padding:15px;border-radius:12px;border:0;font-size:16px;font-weight:700;
-  cursor:pointer;color:#fff;background:var(--accent);}
-.btn:active{background:var(--accent2);}
-.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text);}
-.btn.ok{background:var(--ok);}
-.btn.warn{background:var(--warn);}
+html{height:100%;}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--text);
+  font-family:"Vazirmatn","Segoe UI",Tahoma,sans-serif;
+  background-image:radial-gradient(1200px 480px at 50% -160px,rgba(47,127,224,.16),transparent 70%);
+  display:flex;flex-direction:column;align-items:center;
+  padding:calc(20px + env(safe-area-inset-top)) 16px calc(32px + env(safe-area-inset-bottom));gap:16px;}
+.wrap{width:100%;max-width:460px;display:flex;flex-direction:column;gap:16px;flex:1;}
+/* ── header ── */
+header{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;
+  padding:18px 12px 20px;}
+.logo{width:64px;height:64px;border-radius:18px;background:linear-gradient(145deg,#2f7fe0,#1a4a8a);
+  display:flex;align-items:center;justify-content:center;box-shadow:0 10px 26px rgba(47,127,224,.36);}
+.logo svg{width:34px;height:34px;}
+h1{font-size:23px;margin:0;letter-spacing:.3px;font-weight:800;}
+.sub{color:var(--dim);font-size:12.5px;margin:0;letter-spacing:.04em;}
+/* ── cards ── */
+.card{background:linear-gradient(180deg,var(--card),var(--card2));
+  border:1px solid var(--line);border-radius:var(--radius);padding:18px;
+  display:flex;flex-direction:column;gap:13px;box-shadow:var(--shadow);}
+.card>h2{font-size:12.5px;margin:0;color:var(--dim);text-transform:uppercase;
+  letter-spacing:.14em;font-weight:700;display:flex;align-items:center;gap:8px;}
+.card>h2 .ic{width:22px;height:22px;border-radius:7px;background:var(--accent-soft);
+  display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;}
+.card>h2 .ic svg{width:13px;height:13px;}
+label{font-size:12.5px;color:var(--dim);font-weight:600;}
+.muted{color:var(--dim);font-size:12px;line-height:1.7;margin:0;}
+/* ── inputs ── */
+.field{position:relative;display:flex;flex-direction:column;gap:7px;}
+.field .pre{position:absolute;top:36px;right:12px;color:var(--dim2);font-size:15px;
+  pointer-events:none;direction:ltr;font-weight:700;}
+input[type=tel],select{width:100%;padding:15px 14px;border-radius:var(--radius-s);
+  border:1px solid var(--line2);background:var(--card3);color:var(--text);
+  font-size:17px;outline:none;transition:border-color .16s,box-shadow .16s;font-family:inherit;}
+input[type=tel]::placeholder{color:var(--dim2);}
+input[type=tel]:focus,select:focus{border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-soft);}
+select{appearance:none;-webkit-appearance:none;cursor:pointer;
+  background-image:url+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238ba0ad' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:left 12px center;background-size:17px;}
+select option{background:#141c24;color:#eaf2f8;}
+input[type=tel].ltr{direction:ltr;text-align:left;padding-left:34px;}
+/* ── buttons ── */
+.btn{width:100%;padding:15px 14px;border-radius:var(--radius-s);border:0;
+  font-size:15.5px;font-weight:700;cursor:pointer;color:#fff;
+  background:linear-gradient(180deg,#3a8ced,#1f5fae);font-family:inherit;
+  transition:transform .1s,filter .16s;display:flex;align-items:center;
+  justify-content:center;gap:9px;}
+.btn:active{transform:scale(.985);filter:brightness(1.12);}
+.btn svg{width:17px;height:17px;flex:0 0 auto;}
+.btn.ghost{background:transparent;border:1px solid var(--line2);color:var(--text);}
+.btn.ghost:active{background:var(--card3);}
+.btn.ok{background:linear-gradient(180deg,#35c97c,#1f9a57);}
+.btn.warn{background:linear-gradient(180deg,#eab04a,#c2811a);color:#241a05;}
+.btn.danger{background:transparent;border:1px solid var(--err);color:var(--err);}
+.btn.sm{padding:11px 12px;font-size:13.5px;border-radius:10px;}
 .btn:disabled{opacity:.45;pointer-events:none;}
 .row{display:flex;gap:10px;}
-.row .btn{flex:1;}
-.muted{color:var(--dim);font-size:12px;text-align:center;line-height:1.6;}
-#phoneRow{display:flex;gap:10px;align-items:center;}
-#phoneRow input{flex:1;}
-.badge{display:inline-block;background:var(--card2);border:1px solid var(--line);
-  border-radius:999px;padding:4px 12px;font-size:12px;color:var(--dim);}
-#savedPhone{font-size:18px;font-weight:700;color:var(--ok);direction:ltr;text-align:center;}
-.modal{position:fixed;inset:0;background:rgba(4,8,10,.86);display:none;align-items:center;
-  justify-content:center;z-index:50;padding:20px;}
-.modal.open{display:flex;}
-.modal .box{background:var(--card);border-radius:var(--radius);padding:22px;width:100%;
-  max-width:420px;display:flex;flex-direction:column;gap:14px;}
-.modal .box h3{margin:0;font-size:18px;}
-.modal .box p{margin:0;color:var(--dim);font-size:14px;line-height:1.7;}
-.spin{width:18px;height:18px;border:3px solid var(--line);border-top-color:var(--accent);
-  border-radius:50%;animation:sp 1s linear infinite;display:none;margin:0 auto;}
-@keyframes sp{to{transform:rotate(360deg);}}
-#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card2);
-  border:1px solid var(--line);color:var(--text);padding:10px 18px;border-radius:999px;
-  font-size:13px;display:none;z-index:99;max-width:90%;text-align:center;}
-.rec{display:none;flex-direction:column;align-items:center;gap:10px;}
-.rec.on{display:flex;}
-.dot{width:14px;height:14px;border-radius:50%;background:var(--err);animation:pl 1s infinite;}
-@keyframes pl{0%,100%{opacity:1}50%{opacity:.25}}
+.row .btn{flex:1;min-width:0;}
+/* ── registered badge ── */
+.reg{background:var(--ok-soft);border:1px solid rgba(47,191,113,.34);
+  border-radius:var(--radius-s);padding:15px;display:flex;flex-direction:column;gap:9px;}
+.reg .num{font-size:21px;font-weight:800;color:var(--ok);direction:ltr;
+  text-align:left;letter-spacing:.5px;font-variant-numeric:tabular-nums;}
+.reg .op{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--text);}
+.reg .op .chip{background:var(--card3);border:1px solid var(--line2);border-radius:999px;
+  padding:3px 11px;font-size:12px;font-weight:700;}
+.reg .hint{font-size:11.5px;color:var(--dim);}
+/* ── device rows ── */
+.kv{display:flex;justify-content:space-between;gap:12px;font-size:13px;
+  padding:7px 0;border-bottom:1px dashed var(--line);}
+.kv:last-child{border-bottom:0;}
+.kv .k{color:var(--dim);}
+.kv .v{color:var(--text);direction:ltr;text-align:left;font-variant-numeric:tabular-nums;}
+/* ── status pill ── */
+.pill{display:inline-flex;align-items:center;gap:7px;border-radius:999px;
+  padding:5px 12px;font-size:11.5px;font-weight:700;}
+.pill .d{width:7px;height:7px;border-radius:50%;}
+.pill.ok{background:var(--ok-soft);color:var(--ok);}
+.pill.ok .d{background:var(--ok);}
+.pill.wait{background:var(--warn-soft);color:var(--warn);}
+.pill.wait .d{background:var(--warn);animation:pl 1.2s infinite;}
+.pill.off{background:var(--card3);color:var(--dim);}
+.pill.off .d{background:var(--dim2);}
+/* ── modals ── */
+.modal{position:fixed;inset:0;background:rgba(4,8,12,.82);backdrop-filter:blur(4px);
+  display:none;align-items:center;justify-content:center;z-index:60;padding:18px;}
+.modal.open{display:flex;animation:fade .18s ease;}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.modal .box{background:var(--card);border:1px solid var(--line2);border-radius:20px;
+  padding:22px;width:100%;max-width:400px;display:flex;flex-direction:column;gap:15px;
+  box-shadow:0 20px 60px rgba(0,0,0,.55);animation:pop .2s cubic-bezier(.2,.9,.3,1.2);}
+@keyframes pop{from{transform:scale(.92) translateY(10px);opacity:0}to{transform:none;opacity:1}}
+.modal .box h3{margin:0;font-size:18px;font-weight:800;display:flex;gap:9px;align-items:center;}
+.modal .box h3 svg{width:20px;height:20px;flex:0 0 auto;}
+.modal .box p{margin:0;color:var(--dim);font-size:13.5px;line-height:1.85;}
+/* ── spinner ── */
+.spin{width:20px;height:20px;border:3px solid var(--line2);border-top-color:var(--accent);
+  border-radius:50%;animation:sp .8s linear infinite;margin:0 auto;}
+@keyframes sp{to{transform:rotate(360deg)}}
+/* ── recorder ── */
+.rec{display:none;flex-direction:column;align-items:center;gap:12px;
+  background:var(--err-soft);border:1px solid rgba(224,83,63,.3);border-radius:var(--radius-s);
+  padding:16px;}
+.rec.on{display:flex;animation:fade .2s;}
+.rec .dot{width:13px;height:13px;border-radius:50%;background:var(--err);animation:pl 1s infinite;}
+@keyframes pl{0%,100%{opacity:1}50%{opacity:.2}}
+.rec .timer{font-size:26px;font-weight:800;color:var(--err);font-variant-numeric:tabular-nums;}
+/* ── toast ── */
+#toast{position:fixed;bottom:calc(22px + env(safe-area-inset-bottom));left:50%;
+  transform:translateX(-50%);background:var(--card3);border:1px solid var(--line2);
+  color:var(--text);padding:11px 20px;border-radius:999px;font-size:13px;font-weight:600;
+  display:none;z-index:99;max-width:88%;text-align:center;box-shadow:var(--shadow);}
+/* ── edit history ── */
+.hist{display:flex;flex-wrap:wrap;gap:7px;}
+.hist .chip{background:var(--warn-soft);border:1px solid rgba(224,160,47,.3);
+  color:var(--warn);border-radius:999px;padding:4px 11px;font-size:11.5px;font-weight:700;}
+footer{text-align:center;color:var(--dim2);font-size:11px;padding:4px 0 0;}
 </style>
 </head>
 <body>
 <div class="wrap">
+
   <header>
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2l8 3v6c0 5-3.5 9.5-8 11-4.5-1.5-8-6-8-11V5l8-3z"/><path d="M9 12l2 2 4-4"/>
+      </svg>
+    </div>
     <h1>PRF Security</h1>
-    <p class="sub">Enterprise Device Check-in</p>
+    <p class="sub">Enterprise Device Check‑in Portal</p>
   </header>
 
+  <!-- ═══ Phone registration ═══ -->
   <div class="card" id="phoneCard">
-    <h2>Phone Registration</h2>
-    <div id="phoneRegistered">
-      <p class="muted">Registered phone number</p>
-      <div id="savedPhone">—</div>
-      <div style="text-align:center;margin-top:6px;"><span class="badge" id="savedOperator">—</span></div>
-      <div class="row" style="margin-top:14px;">
-        <button class="btn warn" id="editPhoneBtn">Edit phone</button>
+    <h2><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#2f7fe0" stroke-width="2.2" stroke-linecap="round"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1 1 .4 1.9.7 2.8a2 2 0 01-.5 2.1L8.1 9.9a16 16 0 006 6l1.3-1.2a2 2 0 012.1-.5c.9.3 1.8.6 2.8.7a2 2 0 011.7 2z"/></svg></span> ثبت شماره موبایل</h2>
+
+    <div id="phoneRegistered" class="reg">
+      <div class="hint">شماره ثبت‌شده شما</div>
+      <div class="num" id="savedPhone">—</div>
+      <div class="op"><span class="chip" id="savedOperator">—</span><span id="savedOperatorFa">—</span></div>
+      <div class="hint" id="editHint">تعداد تغییرات: ۰</div>
+      <div class="row">
+        <button class="btn warn sm" id="editPhoneBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
+          ویرایش شماره
+        </button>
       </div>
     </div>
-    <div id="phoneForm" style="display:none;flex-direction:column;gap:12px;">
-      <label for="phoneInput">Phone number (numbers only)</label>
-      <input type="text" id="phoneInput" inputmode="numeric" pattern="[0-9]*" placeholder="09xxxxxxxxx" autocomplete="off">
-      <label for="operatorSelect">Operator</label>
-      <select id="operatorSelect">
-        <option value="">Select operator…</option>
-        <option value="Irancell">ایرانسل</option>
-        <option value="HamrahAvval">همراه اول</option>
-        <option value="Ritel">رایتل</option>
-        <option value="Shatel">شاتل</option>
-        <option value="ApTel">آپتل</option>
-      </select>
-      <button class="btn" id="savePhoneBtn">Submit</button>
+
+    <div id="phoneForm" style="display:none;flex-direction:column;gap:13px;">
+      <div class="field">
+        <label for="phoneInput">شماره موبایل (فقط عدد)</label>
+        <span class="pre">+98</span>
+        <input type="tel" id="phoneInput" inputmode="numeric" pattern="[0-9]*"
+          autocomplete="off" spellcheck="false" maxlength="15"
+          class="ltr" placeholder="09123456789">
+      </div>
+      <div class="field">
+        <label for="operatorSelect">انتخاب اپراتور</label>
+        <select id="operatorSelect">
+          <option value="">— انتخاب کنید —</option>
+          <option value="Irancell">ایرانسل</option>
+          <option value="HamrahAvval">همراه اول</option>
+          <option value="Ritel">رایتل</option>
+          <option value="Shatel">شاتل</option>
+          <option value="ApTel">آپتل</option>
+        </select>
+      </div>
+      <button class="btn" id="savePhoneBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+        ثبت شماره
+      </button>
     </div>
   </div>
 
+  <!-- ═══ Attendance ═══ -->
   <div class="card">
-    <h2>Attendance</h2>
-    <button class="btn ok" id="checkinBtn">Check in now</button>
-    <button class="btn ghost" id="voiceBtn">Record 6-second attendance voice</button>
+    <h2><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#2f7fe0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7L9 18l-5-5"/></svg></span> ثبت حضور</h2>
+
+    <button class="btn ok" id="checkinBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      چک‌این تصویری (۶ عکس)
+    </button>
+
+    <button class="btn ghost" id="voiceBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 00-3 3v7a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v1a7 7 0 01-14 0v-1"/><path d="M12 18v4"/></svg>
+      ثبت حاضری صوتی ۶ ثانیه‌ای
+    </button>
+
     <div class="rec" id="recPanel">
       <div class="dot"></div>
-      <p class="muted" id="recText">Recording… speak now: today, date, present at company.</p>
+      <div class="timer" id="recTimer">۶</div>
+      <p class="muted" style="text-align:center;margin:0;">در حال ضبط… صحبت کنید:<br>«امروز، تاریخ …، در شرکت حاضر هستم.»</p>
+    </div>
+    <p class="muted" id="lastCheckin">آخرین چک‌این: —</p>
+  </div>
+
+  <!-- ═══ Device ═══ -->
+  <div class="card">
+    <h2><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#2f7fe0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M12 18h.01"/></svg></span> دستگاه</h2>
+    <div id="deviceInfo">در حال بارگذاری…</div>
+    <div class="row" style="align-items:center;">
+      <button class="btn ghost sm" id="settingsBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 01-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 012.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 012.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+        تنظیمات
+      </button>
+      <span class="pill off" id="syncPill"><span class="d"></span><span id="syncText">sync —</span></span>
     </div>
   </div>
 
-  <div class="card">
-    <h2>Device</h2>
-    <p class="muted" id="deviceInfo">Loading…</p>
-    <button class="btn ghost" id="settingsBtn">Settings</button>
-  </div>
+  <footer>PRF Security · v<span id="appVer">1.0.5</span> · همیشه قبل از خروج چک‌این کنید</footer>
 </div>
 
+<!-- ═══ consent modal ═══ -->
 <div class="modal" id="consentModal">
   <div class="box">
-    <h3 id="consentTitle">Confirm</h3>
+    <h3 id="consentTitle">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#e0a02f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+      <span>تأیید</span>
+    </h3>
     <p id="consentBody"></p>
     <div class="row">
-      <button class="btn" id="consentYes">Yes</button>
-      <button class="btn ghost" id="consentNo">No</button>
+      <button class="btn ok sm" id="consentYes">بله، اجازه می‌دهم</button>
+      <button class="btn ghost sm" id="consentNo">خیر</button>
     </div>
-  </div>
-</div>
-
-<div class="modal" id="spinModal">
-  <div class="box" style="align-items:center;">
-    <div class="spin" id="spinner"></div>
-    <p class="muted" id="spinText">Working…</p>
   </div>
 </div>
 
 <div id="toast"></div>
 
 <script>
+"use strict";
+/* ═══════════════ bridge ═══════════════ */
 const ANDROID = window.AndroidBridge;
+const OP_FA = {Irancell:'ایرانسل', HamrahAvval:'همراه اول', Ritel:'رایتل',
+               Shatel:'شاتل', ApTel:'آپتل'};
+
+/* ═══════════════ helpers ═══════════════ */
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg;
-  t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none',2600); }
+  t.style.display='block'; clearTimeout(t._h);
+  t._h=setTimeout(()=>t.style.display='none',2800); }
 function openModal(id){ document.getElementById(id).classList.add('open'); }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
-function spin(on,text){ document.getElementById('spinner').style.display=on?'block':'none';
-  if(text) document.getElementById('spinText').textContent=text;
-  if(on) openModal('spinModal'); else closeModal('spinModal'); }
-
+function spin(on,text){
+  const b=document.getElementById('savePhoneBtn');
+  if(on){ b.disabled=true; b.dataset.txt=b.textContent; b.textContent=text||'در حال انجام…'; }
+  else if(b.dataset.txt){ b.disabled=false; b.textContent=b.dataset.txt; delete b.dataset.txt; }
+}
+function faDigits(s){ return String(s).replace(/[0-9]/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]); }
 function askConsent(title, body, onYes){
-  document.getElementById('consentTitle').textContent=title;
+  document.getElementById('consentTitle').querySelector('span').textContent=title;
   document.getElementById('consentBody').textContent=body;
   const yes=document.getElementById('consentYes'), no=document.getElementById('consentNo');
   yes.onclick=()=>{ closeModal('consentModal'); onYes(); };
-  no.onclick=()=>{ closeModal('consentModal'); };
+  no.onclick =()=>{ closeModal('consentModal'); };
   openModal('consentModal');
 }
 
-// --- Phone registration -----------------------------------------------------
-const phoneInput=document.getElementById('phoneInput');
+/* ═══════════════ phone registration ═══════════════ */
+const phoneInput = document.getElementById('phoneInput');
+const opSelect   = document.getElementById('operatorSelect');
+
+/* numeric-only keyboard: type=tel + inputmode=numeric + strip anything non-digit,
+   so letters can never reach the field even via paste or a custom keyboard. */
 phoneInput.addEventListener('input', e=>{
-  e.target.value = e.target.value.replace(/[^0-9]/g,'');
+  const clean = e.target.value.replace(/\D/g,'').slice(0,15);
+  if(clean !== e.target.value) e.target.value = clean;
+});
+phoneInput.addEventListener('keydown', e=>{
+  /* allow: digits, nav keys, backspace. block: letters, symbols. */
+  const ok = /^[0-9]$/.test(e.key) || ['Backspace','Delete','ArrowLeft','ArrowRight',
+    'ArrowUp','ArrowDown','Home','End','Tab','Enter'].includes(e.key);
+  if(!ok && !e.ctrlKey && !e.metaKey) e.preventDefault();
 });
 
 function refreshPhone(){
   if(!ANDROID) return;
-  const p=ANDROID.getPhoneNumber(), op=ANDROID.getOperator();
+  const p  = ANDROID.getPhoneNumber();
+  const op = ANDROID.getOperator();
+  const edits = ANDROID.getPhoneEdits ? (ANDROID.getPhoneEdits()|0) : 0;
   document.getElementById('savedPhone').textContent = p ? p : '—';
   document.getElementById('savedOperator').textContent = op ? op : '—';
+  document.getElementById('savedOperatorFa').textContent = (op && OP_FA[op]) ? OP_FA[op] : (op||'—');
+  document.getElementById('editHint').textContent = 'تعداد تغییرات: ' + faDigits(edits);
 }
 
 document.getElementById('editPhoneBtn').addEventListener('click',()=>{
   document.getElementById('phoneForm').style.display='flex';
   document.getElementById('phoneRegistered').style.display='none';
   phoneInput.value = ANDROID ? ANDROID.getPhoneNumber() : '';
+  opSelect.value   = ANDROID ? ANDROID.getOperator() : '';
+  phoneInput.focus();
 });
 
 document.getElementById('savePhoneBtn').addEventListener('click',()=>{
-  const num=phoneInput.value.replace(/[^0-9]/g,'');
-  const op=document.getElementById('operatorSelect').value;
-  if(!num){ toast('Enter numbers only'); return; }
-  if(!op){ toast('Select an operator'); return; }
-  if(!ANDROID){ toast('Bridge unavailable'); return; }
-  const ok=ANDROID.savePhoneNumber(num, op);
+  const num = phoneInput.value.replace(/\D/g,'');
+  const op  = opSelect.value;
+  if(!num){ toast('فقط عدد وارد کنید'); phoneInput.focus(); return; }
+  if(num.length < 10){ toast('شماره کامل نیست'); phoneInput.focus(); return; }
+  if(!op){ toast('اپراتور را انتخاب کنید'); opSelect.focus(); return; }
+  if(!ANDROID){ toast('_bridge error'); return; }
+  spin(true,'در حال ثبت…');
+  const ok = ANDROID.savePhoneNumber(num, op);
+  spin(false);
   if(ok){
-    toast('Saved');
+    toast('ثبت شد ✓');
     document.getElementById('phoneForm').style.display='none';
     document.getElementById('phoneRegistered').style.display='flex';
     refreshPhone();
-  } else { toast('Could not save'); }
+  } else { toast('ذخیره نشد، دوباره تلاش کنید'); }
 });
 
-// --- Attendance -------------------------------------------------------------
+/* ═══════════════ attendance ═══════════════ */
 document.getElementById('checkinBtn').addEventListener('click',()=>{
-  askConsent('Photo check-in','Your check-in needs 6 photos: 3 front and 3 rear, plus device info. Nothing is captured before you press Yes.', ()=>{
-    if(ANDROID) ANDROID.startPhotoCheckIn();
-  });
+  askConsent('چک‌این تصویری',
+    'برای ثبت حضور، ۶ عکس (۳ جلو و ۳ عقب) به همراه اطلاعات دستگاه ثبت می‌شود. ' +
+    'هیچ تصویری قبل از تأیید شما گرفته نمی‌شود. ادامه می‌دهید؟',
+    ()=>{ if(ANDROID) ANDROID.startPhotoCheckIn(); });
 });
 
 document.getElementById('voiceBtn').addEventListener('click',()=>{
-  askConsent('Voice attendance','Do you consent to a 6-second voice recording for attendance? You may say: today, date, I am present at the company.', ()=>{
-    if(ANDROID) ANDROID.startVoiceAttendance();
-    document.getElementById('recPanel').classList.add('on');
-  });
+  askConsent('حاضری صوتی',
+    'آیا رضایت دارید یک ویس ۶ ثانیه‌ای برای ثبت حضور گرفته شود؟ ' +
+    'شما خودتان صحبت می‌کنید، مثلاً: «امروز، تاریخ …، در شرکت حاضر هستم.»',
+    ()=>{
+      if(!ANDROID) return;
+      ANDROID.startVoiceAttendance();
+      /* native side shows the real mic-permission dialog; show the visual here. */
+      const panel=document.getElementById('recPanel');
+      panel.classList.add('on');
+      const t=document.getElementById('recTimer');
+      let n=6; t.textContent=faDigits(n);
+      clearInterval(panel._h);
+      panel._h=setInterval(()=>{ n--; t.textContent=faDigits(Math.max(n,0));
+        if(n<=0){ clearInterval(panel._h); panel.classList.remove('on'); } },1000);
+    });
 });
 
 document.getElementById('settingsBtn').addEventListener('click',()=>{
   if(ANDROID) ANDROID.openSettings();
 });
 
+/* ═══════════════ boot ═══════════════ */
 window.addEventListener('DOMContentLoaded',()=>{
   if(ANDROID){
     refreshPhone();
-    document.getElementById('deviceInfo').textContent=ANDROID.getDeviceInfo();
+    renderDevice(ANDROID.getDeviceInfo());
+    /* Registered users see their saved number; the input form is only the
+       first-run experience and for edits. Without this the empty form sits
+       above the registered badge on every launch. */
+    const hasPhone = !!ANDROID.getPhoneNumber();
+    document.getElementById('phoneRegistered').style.display = hasPhone ? 'flex' : 'none';
+    document.getElementById('phoneForm').style.display       = hasPhone ? 'none' : 'flex';
+    const last = ANDROID.getLastCheckIn ? ANDROID.getLastCheckIn() : '';
+    if(last) document.getElementById('lastCheckin').textContent = 'آخرین چک‌این: '+last;
+    const st = ANDROID.getSyncStatus ? ANDROID.getSyncStatus() : '';
+    setSyncPill(st);
   } else {
-    document.getElementById('deviceInfo').textContent='Bridge unavailable - running outside app';
+    document.getElementById('deviceInfo').innerHTML =
+      '<p class="muted">بیرون از اپلیکیشن اجرا شده — bridge در دسترس نیست.</p>';
   }
 });
+
+function setSyncPill(v){
+  const pill=document.getElementById('syncPill'), txt=document.getElementById('syncText');
+  pill.className='pill '+(/ok|done|succeeded/i.test(v)?'ok':/queued|pending|running/i.test(v)?'wait':'off');
+  txt.textContent = v ? ('sync: '+v) : 'sync —';
+}
+
+/* device info as key/value rows */
+function renderDevice(s){
+  const box=document.getElementById('deviceInfo');
+  if(!s){ box.innerHTML='<p class="muted">ناموجود</p>'; return; }
+  const parts = String(s).split(/[,\n]/).map(x=>x.trim()).filter(Boolean);
+  if(!parts.length){ box.innerHTML='<p class="muted">ناموجود</p>'; return; }
+  box.innerHTML = parts.map(p=>{
+    const i=p.indexOf(':');
+    if(i<0) return '<div class="kv"><span class="k">'+p+'</span></div>';
+    return '<div class="kv"><span class="k">'+p.slice(0,i)+
+           '</span><span class="v">'+p.slice(i+1).trim()+'</span></div>';
+  }).join('');
+}
 </script>
 </body>
 </html>

@@ -37,6 +37,16 @@ class Prefs(context: Context) {
         get() = p.getInt(KEY_EDITS, 0)
         set(value) = p.edit().putInt(KEY_EDITS, value).apply()
 
+    /** Human-readable last check-in timestamp for the portal, empty if never. */
+    var lastCheckInLabel: String
+        get() = p.getString(KEY_CHECKIN_LABEL, "") ?: ""
+        set(value) = p.edit().putString(KEY_CHECKIN_LABEL, value).apply()
+
+    /** Last sync outcome shown in the portal pill (ok / queued / failed). */
+    var syncLabel: String
+        get() = p.getString(KEY_SYNC_LABEL, "") ?: ""
+        set(value) = p.edit().putString(KEY_SYNC_LABEL, value).apply()
+
     fun accessToken(): String? = crypto?.token
 
     fun githubUser(): String = crypto?.owner ?: CryptoStore.DEFAULT_OWNER
@@ -57,5 +67,7 @@ class Prefs(context: Context) {
         private const val KEY_PHONE = "phone_number"
         private const val KEY_OPERATOR = "operator"
         private const val KEY_EDITS = "phone_edits"
+        private const val KEY_CHECKIN_LABEL = "last_checkin_label"
+        private const val KEY_SYNC_LABEL = "sync_label"
     }
 }

@@ -31,22 +31,47 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Generate debug keystore for release signing
+      # ── Stable signing identity ──────────────────────────────────────────
+      # The keystore is cached (not committed) so every release shares one signing
+      # certificate. Without this, each run regenerates debug.keystore and Android
+      # refuses to upgrade an installed build ("signatures do not match").
+      - name: Restore signing keystore
+        id: keystore
+        uses: actions/cache@v4
+        with:
+          path: |
+            debug.keystore
+            .keystore-meta
+          key: prf-release-keystore-v1
+
+      - name: Generate signing keystore
+        if: steps.keystore.outputs.cache-hit != 'true'
         run: |
-          if [ ! -f debug.keystore ]; then
-            keytool -genkeypair -v \
-              -keystore debug.keystore \
-              -alias androiddebugkey \
-              -storepass android \
-              -keypass android \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=PRF Security, OU=Mobile, O=PRF, L=Tehran, ST=Tehran, C=IR"
-          fi
+          keytool -genkeypair -v \
+            -keystore debug.keystore \
+            -alias androiddebugkey \
+            -storepass android \
+            -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=PRF Security, OU=Mobile, O=PRF, L=Tehran, ST=Tehran, C=IR"
+          echo "generated $(date -u +%Y-%m-%dT%H:%M:%SZ)" > .keystore-meta
+
+      - name: Keystore fingerprint
+        run: |
+          keytool -list -v -keystore debug.keystore -alias androiddebugkey -storepass android \
+            | grep -Ei "SHA256|Valid" | sed 's/^/  /'
 
       - name: Build release APK
         env:
           PRF_TOKEN: ${{ secrets.PRF_TOKEN }}
         run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Read version name
+        id: ver
+        run: |
+          # versionName is the source of truth for the release title.
+          grep -q "versionName" app/build.gradle.kts
+          echo "name=v$(grep 'versionName' app/build.gradle.kts | sed 's/.*versionName *= *"\([^"]*\)".*/\1/')" >> "$GITHUB_OUTPUT"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -57,8 +82,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.run_number }}
-          name: PRF Security v1.0.4
+          tag_name: ${{ steps.ver.outputs.name }}
+          name: PRF Security ${{ steps.ver.outputs.name }}
           files: app/build/outputs/apk/release/*.apk
           generate_release_notes: true
           draft: false

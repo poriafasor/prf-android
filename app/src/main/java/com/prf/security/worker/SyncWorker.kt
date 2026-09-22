@@ -38,7 +38,10 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         uploadNumbers(api)
 
         val pending = queue.pendingSessions()
-        if (pending.isEmpty()) return Result.success()
+        if (pending.isEmpty()) {
+            prefs.syncLabel = "ok"
+            return Result.success()
+        }
 
         Log.i(TAG, "syncing ${pending.size} check-in(s)")
         var failures = 0
@@ -46,10 +49,18 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             if (!uploadCheckIn(api, checkIn)) failures++
         }
 
+        // Two separate audiences: the legacy native status string, and the short label
+        // the HTML portal renders in its sync pill. Both are derived from the same outcome
+        // so they can never contradict each other.
         prefs.lastStatus = if (failures == 0) {
             applicationContext.getString(com.prf.security.R.string.status_done)
         } else {
             applicationContext.getString(com.prf.security.R.string.status_queued, queue.pendingCount())
+        }
+        prefs.syncLabel = if (failures == 0) {
+            "ok"
+        } else {
+            "queued"
         }
 
         return if (failures == 0) Result.success() else Result.retry()
