@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PRF Security - Admin Panel</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <div class="brand">PRF Security</div>
+  <div class="sub">Enterprise Device Check-in Database</div>
+</header>
+
+<section id="login" class="card">
+  <h2>Sign in</h2>
+  <p class="hint">Enter a GitHub token with <b>repo</b> scope (read is enough) on
+  <b>poriafasor/prf-database</b>. The token stays in your browser and is used only to
+  call the GitHub API directly from this page - there is no server.</p>
+  <input id="token" type="password" placeholder="github_pat_... / ghp_..." autocomplete="off">
+  <div class="row">
+    <input id="owner" placeholder="owner" value="poriafasor">
+    <input id="repo" placeholder="repo" value="prf-database">
+  </div>
+  <button id="connect">Connect</button>
+  <div id="err" class="err"></div>
+</section>
+
+<section id="panel" hidden>
+  <div class="toolbar card">
+    <div>
+      <b id="dbMeta"></b>
+      <div class="hint" id="dbCount"></div>
+    </div>
+    <button id="refresh" class="ghost">Refresh</button>
+    <button id="logout" class="ghost">Sign out</button>
+  </div>
+
+  <div class="card">
+    <h2>Devices</h2>
+    <input id="search" placeholder="filter by device id / model…" autocomplete="off">
+    <div id="devices" class="list"></div>
+  </div>
+
+  <div class="card" id="detailCard" hidden>
+    <h2 id="detailTitle"></h2>
+    <div class="detail-meta">
+      <button id="tabInfo" class="tab active">User info</button>
+      <button id="tabVoice" class="tab">Voice attendance</button>
+      <button id="tabPhotos" class="tab">Photos</button>
+    </div>
+    <div id="detailInfo" class="info"></div>
+    <div id="voiceCard" hidden>
+      <div class="hint" id="voiceHint"></div>
+      <audio id="voicePlayer" controls preload="metadata"></audio>
+    </div>
+    <h3>Check-in dates</h3>
+    <div id="detailDates" class="dates"></div>
+    <div id="detailImages"></div>
+  </div>
+</section>
+
+<script src="app.js"></script>
+</body>
+</html>
