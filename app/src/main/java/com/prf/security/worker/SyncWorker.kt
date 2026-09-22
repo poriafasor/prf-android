@@ -125,3 +125,4 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         const val WORK_NAME = "prf_sync_queue"
     }
 }
+}
