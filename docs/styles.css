@@ -44,15 +44,34 @@ button:hover { filter: brightness(1.15); }
   color: #fff; font-size: 11px; padding: 2px 7px; border-radius: 6px; }
 .spin { text-align: center; color: var(--dim); padding: 30px; }
 
-/* Device detail tabs + voice playback */
-.detail-meta { display: flex; gap: 8px; margin: 4px 0 14px; }
-.tab { background: var(--surface2); color: var(--dim); border: 1px solid transparent;
-  border-radius: 999px; padding: 7px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
-.tab.active { border-color: var(--accent); color: var(--text); }
-#voiceCard audio { width: 100%; margin: 10px 0 4px; }
-#voiceRows { display: grid; gap: 8px; margin-top: 10px; }
-.vrow { display: flex; align-items: center; gap: 12px; background: var(--surface2);
-  border-radius: 10px; padding: 10px 14px; cursor: pointer; border: 1px solid transparent; }
-.vrow:hover { border-color: var(--accent); }
-.vrow .vwhen { font-family: ui-monospace, monospace; font-size: 13px; }
-.vrow .vsize { color: var(--dim); font-size: 12px; margin-left: auto; }
+/* ═══ v2: per-device tree, voice player, delete actions ═══ */
+.dhead { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.dhead h2 { margin:0; }
+button.danger { background: var(--bad); }
+button.sm { padding: 7px 13px; font-size: 13px; border-radius: 7px; }
+button.danger:hover { filter: brightness(1.15); }
+.voices { display:flex; flex-direction:column; gap:10px; }
+.voice { display:flex; align-items:center; gap:12px; background: var(--surface2);
+  border-radius:10px; padding:10px 14px; }
+.voice .nm { font-family: ui-monospace, monospace; font-size:12px; color: var(--dim);
+  word-break: break-all; }
+.voice audio { height: 34px; flex: 1; min-width: 120px; }
+.voice .del { background: transparent; color: var(--bad); padding: 5px 10px; font-size: 12px;
+  border: 1px solid rgba(242,101,74,.4); border-radius: 6px; }
+.photodel { position:absolute; top:5px; right:5px; background: rgba(0,0,0,.72);
+  color:#ff9d8f; border:1px solid rgba(255,255,255,.18); border-radius:6px;
+  padding:3px 8px; font-size:11px; }
+.photodel:hover { background: var(--bad); color:#fff; }
+.over { position:fixed; inset:0; background:rgba(4,8,12,.72); display:flex;
+  align-items:center; justify-content:center; z-index:50; }
+.over .box { background: var(--surface); border-radius:14px; padding:24px 26px;
+  max-width:420px; width:calc(100% - 40px); }
+.over .box p { color: var(--dim); font-size:14px; }
+.over .row { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+
+/* toast (delete feedback) */
+.toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+  background: var(--surface2); color: var(--text); border: 1px solid var(--accent);
+  border-radius: 10px; padding: 11px 20px; font-size: 14px; z-index: 60;
+  box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+.toast.bad { border-color: var(--bad); }

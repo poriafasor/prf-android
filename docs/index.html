@@ -14,9 +14,8 @@
 
 <section id="login" class="card">
   <h2>Sign in</h2>
-  <p class="hint">Enter a GitHub token with <b>repo</b> scope (read is enough) on
-  <b>poriafasor/prf-database</b>. The token stays in your browser and is used only to
-  call the GitHub API directly from this page - there is no server.</p>
+  <p class="hint">Enter a GitHub token with <b>repo</b> scope on <b>poriafasor/prf-database</b>.
+  The token stays in your browser and is used only to call the GitHub API directly from this page.</p>
   <input id="token" type="password" placeholder="github_pat_... / ghp_..." autocomplete="off">
   <div class="row">
     <input id="owner" placeholder="owner" value="poriafasor">
@@ -43,20 +42,23 @@
   </div>
 
   <div class="card" id="detailCard" hidden>
-    <h2 id="detailTitle"></h2>
-    <div class="detail-meta">
-      <button id="tabInfo" class="tab active">User info</button>
-      <button id="tabVoice" class="tab">Voice attendance</button>
-      <button id="tabPhotos" class="tab">Photos</button>
+    <div class="dhead">
+      <h2 id="detailTitle"></h2>
+      <button id="deleteDevice" class="danger sm">Delete device</button>
     </div>
-    <div id="detailInfo" class="info"></div>
-    <div id="voiceCard" hidden>
-      <div class="hint" id="voiceHint"></div>
-      <audio id="voicePlayer" controls preload="metadata"></audio>
-    </div>
-    <h3>Check-in dates</h3>
+
+    <h3>Registered phone</h3>
+    <div id="detailPhone" class="info">—</div>
+
+    <h3>Device info</h3>
+    <div id="detailInfo" class="info">—</div>
+
+    <h3>Photos</h3>
     <div id="detailDates" class="dates"></div>
     <div id="detailImages"></div>
+
+    <h3>Voice attendance</h3>
+    <div id="detailVoices" class="voices"></div>
   </div>
 </section>
 

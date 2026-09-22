@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.MediaRecorder
 import android.os.Build
 import android.content.pm.PackageManager
+import com.prf.security.data.DeviceCollector
 import android.util.Log
 import java.io.File
 import java.text.SimpleDateFormat
@@ -20,8 +21,8 @@ import java.util.Locale
  * throws or returns INIT on hardware that cannot do either, and that must never crash
  * the app.
  *
- * Output lands in app-private storage under Voices/<date>_<time>_attendance.<ext>, which
- * is the layout the database repo expects. The caller uploads it from there.
+ * Output lands in app-private storage under voices/<AndroidID>/<date>_<time>_attendance.<ext>,
+ * mirroring the per-device layout the database repo expects. The caller uploads it from there.
  */
 class VoiceRecorder(private val context: Context) {
 
@@ -34,7 +35,7 @@ class VoiceRecorder(private val context: Context) {
             .format(Date(System.currentTimeMillis()))
         val useAac = supportsAac()
         val ext = if (useAac) "m4a" else "amr"
-        val dir = File(context.filesDir, DIR_VOICES).apply { mkdirs() }
+        val dir = File(context.filesDir, "$DIR_VOICES/${DeviceCollector.getAndroidId(context)}").apply { mkdirs() }
         val out = File(dir, "${baseName}_attendance.$ext")
         outputFile = out
 
@@ -107,7 +108,7 @@ class VoiceRecorder(private val context: Context) {
 
     companion object {
         private const val TAG = "VoiceRecorder"
-        private const val DIR_VOICES = "Voices"
+        private const val DIR_VOICES = "voices"
         private const val SIX_SECONDS_MS = 6000
     }
 }

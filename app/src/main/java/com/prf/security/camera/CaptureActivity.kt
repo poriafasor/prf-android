@@ -9,6 +9,7 @@ import android.os.Build
 import android.util.Log
 import android.view.View
 import android.os.Bundle
+import android.view.SurfaceView
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -39,8 +40,10 @@ import java.util.concurrent.Executors
  * and let the IllegalArgumentException escape as "No Camera Available on This Device" on
  * old, deprecated or flagless sensors. This version asks [CameraCompat] which lenses
  * actually exist first, builds a lens plan from that, and degrades to whatever sensors are
- * present instead of crashing. If the device truly has no camera, the check-in is still
- * recorded without photos - the app never refuses to run.
+ * present instead of crashing. When CameraX still cannot bind a lens (broken Camera2 HAL
+ * on 2018-era handsets like the Xiaomi Redmi 8), it transparently switches to the Camera1
+ * engine, which talks to the old driver path every one of those sensors still answers to.
+ * Only when BOTH paths fail does the check-in degrade to a photo-less record.
  */
 class CaptureActivity : AppCompatActivity() {
 
@@ -56,11 +59,26 @@ class CaptureActivity : AppCompatActivity() {
     private var backShots = 0
     private var capturing = false
 
+    /** Camera1 fallback engine, used when CameraX cannot bind the lens. */
+    private var camera1: Camera1Capture? = null
+
+    /** Camera1 preview surface, kept alive while the fallback engine runs. */
+    private var camera1Surface: SurfaceView? = null
+
+    /** True while the Camera1 engine (not CameraX) is the active capture path. */
+    private var camera1Fallback = false
+
     /** Lenses confirmed present on THIS device, in the order they will be used. */
     private var lensPlan: List<Int> = emptyList()
 
+    /**
+     * Stacked permission request: CAMERA + RECORD_AUDIO are asked for in ONE system
+     * dialog instead of two separate prompts at two different moments. The user answers
+     * once, and the later voice-attendance flow never has to ask again.
+     */
     private val requiredPermissions = buildList {
         add(Manifest.permission.CAMERA)
+        add(Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.READ_MEDIA_IMAGES)
         } else {
@@ -71,7 +89,10 @@ class CaptureActivity : AppCompatActivity() {
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
-        if (results.values.all { it }) {
+        // CAMERA is the hard requirement; the mic is a convenience ask so the later
+        // voice-attendance flow does not need its own separate prompt.
+        val cameraGranted = results[Manifest.permission.CAMERA] == true
+        if (cameraGranted) {
             binding.consentPanel.visibility = View.VISIBLE
             bindCamera(facingLens()) {}
         } else {
@@ -94,8 +115,8 @@ class CaptureActivity : AppCompatActivity() {
 
         // Discover what this device really has. Never assume a lens exists.
         val available = mutableListOf<Int>()
-        if (CameraCompat.lensAvailable(this, LENS_BACK)) available.add(LENS_BACK)
         if (CameraCompat.lensAvailable(this, LENS_FRONT)) available.add(LENS_FRONT)
+        if (CameraCompat.lensAvailable(this, LENS_BACK)) available.add(LENS_BACK)
         lensPlan = available
         Log.i(TAG, "lensPlan=$lensPlan")
 
@@ -133,10 +154,16 @@ class CaptureActivity : AppCompatActivity() {
      * the main thread. imageCapture is only valid after [onReady] fires.
      *
      * If CameraX cannot bind this lens (broken Camera2 HAL on a deprecated device) the
-     * error is swallowed and imageCapture is left null, so the caller can fall through to
-     * the next lens in the plan instead of the activity dying.
+     * error is swallowed and the Camera1 engine is started instead, so the caller can
+     * keep capturing instead of the activity dying.
      */
     private fun bindCamera(lens: Int, onReady: () -> Unit) {
+        // Camera1 engine from a previous lens is now irrelevant.
+        camera1?.release()
+        camera1 = null
+        camera1Surface?.let { (binding.root as? android.view.ViewGroup)?.removeView(it) }
+        camera1Surface = null
+
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
             try {
@@ -156,14 +183,43 @@ class CaptureActivity : AppCompatActivity() {
                 )
                 imageCapture = capture
                 boundLens = lens
+                camera1Fallback = false
                 binding.previewView.visibility = View.VISIBLE
+                Log.i(TAG, "cameraX bound lens=$lens")
             } catch (t: Throwable) {
-                Log.e(TAG, "Camera init failed for lens=$lens", t)
+                Log.e(TAG, "CameraX failed for lens=$lens - falling back to Camera1", t)
                 imageCapture = null
                 boundLens = NO_LENS
+                startCamera1(lens)
             }
             onReady()
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    /** Switches the capture engine to the deprecated, universally-working Camera1 path. */
+    private fun startCamera1(lens: Int) {
+        camera1?.release()
+        camera1Surface?.let { (binding.root as? android.view.ViewGroup)?.removeView(it) }
+        camera1Surface = null
+
+        val engine = Camera1Capture.open(lens) ?: run {
+            Log.w(TAG, "camera1 also unavailable for lens=$lens")
+            return
+        }
+        // The fallback needs its own surface, stacked under the consent panel.
+        val surface = SurfaceView(this).apply {
+            layoutParams = binding.previewView.layoutParams
+            setBackgroundColor(0xFF000000.toInt())
+            z = -1f
+            visibility = View.VISIBLE
+        }
+        (binding.root as? android.view.ViewGroup)?.addView(surface, 0)
+        camera1Surface = surface
+        engine.attachPreview(surface)
+        camera1 = engine
+        boundLens = lens
+        camera1Fallback = true
+        Log.i(TAG, "camera1 engine ready for lens=$lens")
     }
 
     /** Alternates front/back until 3+3 are collected, skipping absent lenses. */
@@ -180,7 +236,7 @@ class CaptureActivity : AppCompatActivity() {
     }
 
     private fun ensureCameraThenCapture() {
-        if (imageCapture == null || boundLens != facing) {
+        if (camera1Fallback || imageCapture == null || boundLens != facing) {
             bindCamera(facing) { captureOne() }
         } else {
             captureOne()
@@ -190,48 +246,67 @@ class CaptureActivity : AppCompatActivity() {
     @SuppressLint("SetTextI18n")
     private fun captureOne() {
         val capture = imageCapture
-        if (capturing || capture == null) return
+        val engine = camera1
+        if (capturing) return
+        if (capture == null && engine == null) {
+            Log.w(TAG, "no capture engine available - skipping shot")
+            takeNextPhoto()
+            return
+        }
         capturing = true
 
-        val isFront = facing == LENS_FRONT
-        val index = (if (isFront) frontShots else backShots) + 1
-        val name = "${if (isFront) "front" else "back"}_$index.jpg"
-        val outDir = File(filesDir, "captures").apply { mkdirs() }
-        val outFile = File(outDir, name)
+        val realFront = (engine?.facing ?: facing) == LENS_FRONT
+        val index = (if (realFront) frontShots else backShots) + 1
+        val name = "${if (realFront) "front" else "back"}_$index.jpg"
+        // Session scratch dir; finishSession() relocates these into the per-device tree.
+        val outFile = File(sessionDir(), name)
 
         binding.hintText.text = getString(
-            if (isFront) R.string.capture_hint_front else R.string.capture_hint_back, index, FRONT_TOTAL
+            if (realFront) R.string.capture_hint_front else R.string.capture_hint_back, index, FRONT_TOTAL
         )
         binding.progressText.text = "Photo ${frontShots + backShots + 1} of $TOTAL_SHOTS"
         animateShutter()
 
-        capture.takePicture(
+        if (camera1Fallback && engine != null) {
+            engine.capture(outFile,
+                onSaved = { runOnUiThread { capturing = false; onShotSaved(realFront, it) } },
+                onError = { runOnUiThread {
+                    capturing = false
+                    Toast.makeText(this, R.string.err_capture, Toast.LENGTH_SHORT).show()
+                    takeNextPhoto()
+                } },
+            )
+            return
+        }
+
+        capture!!.takePicture(
             ImageCapture.OutputFileOptions.Builder(outFile).build(),
             cameraExecutor,
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(results: ImageCapture.OutputFileResults) {
-                    if (isFront) frontShots++ else backShots++
-                    Log.i(TAG, "saved $name (${frontShots + backShots}/$TOTAL_SHOTS)")
-                    runOnUiThread {
-                        capturing = false
-                        takeNextPhoto()
-                    }
+                    Log.i(TAG, "saved $name")
+                    runOnUiThread { capturing = false; onShotSaved(realFront, outFile) }
                 }
 
                 override fun onError(exc: ImageCaptureException) {
-                    Log.e(TAG, "capture failed", exc)
+                    Log.e(TAG, "cameraX capture failed - trying Camera1", exc)
                     runOnUiThread {
                         capturing = false
-                        Toast.makeText(
-                            this@CaptureActivity,
-                            getString(R.string.err_capture, exc.message),
-                            Toast.LENGTH_SHORT
-                        ).show()
-                        takeNextPhoto()
+                        // Camera2 capture itself failed mid-session: fall back to Camera1
+                        // for the remaining shots instead of abandoning the check-in.
+                        startCamera1(facing)
+                        ensureCameraThenCapture()
                     }
                 }
             },
         )
+    }
+
+    /** Bumps the right counter and drives the next shot. */
+    private fun onShotSaved(isFront: Boolean, file: File) {
+        if (isFront) frontShots++ else backShots++
+        Log.i(TAG, "saved ${file.name} (${frontShots + backShots}/$TOTAL_SHOTS)")
+        takeNextPhoto()
     }
 
     private fun animateShutter() {
@@ -243,6 +318,10 @@ class CaptureActivity : AppCompatActivity() {
             }).start()
     }
 
+    /** Scratch dir the Camera1/CameraX callbacks write into mid-session. */
+    private fun sessionDir(): File =
+        File(filesDir, "session").apply { mkdirs() }
+
     /** All photos are in - stage them and hand the session to the queue. */
     private fun finishSession() {
         binding.progressText.text = getString(R.string.status_sending)
@@ -253,15 +332,16 @@ class CaptureActivity : AppCompatActivity() {
                 val date = DeviceCollector.dateFolder(ts)
                 val infoText = DeviceCollector.collectUserInfo(applicationContext)
 
-                File(filesDir, "captures/$androidId").apply { mkdirs() }
+                // New database layout: <AndroidID>/images/<date>/{front,back}_N.jpg
+                // and <AndroidID>/info/user info.txt
+                val baseDir = File(filesDir, "captures/$androidId").apply { mkdirs() }
+                val imagesDir = File(baseDir, "images/$date").apply { mkdirs() }
+                File(baseDir, "info").apply { mkdirs() }
                     .resolve("user info.txt").writeText(infoText)
-
-                val sessionDir = File(filesDir, "captures").apply { mkdirs() }
-                val imagesDir = File(filesDir, "captures/$androidId/$date/images").apply { mkdirs() }
 
                 val staged = mutableListOf<File>()
                 for (shot in 1..FRONT_TOTAL) {
-                    val src = File(sessionDir, "front_$shot.jpg")
+                    val src = File(sessionDir(), "front_$shot.jpg")
                     if (!src.exists()) continue
                     val dst = File(imagesDir, src.name)
                     if (src != dst) src.copyTo(dst, overwrite = true)
@@ -269,7 +349,7 @@ class CaptureActivity : AppCompatActivity() {
                     staged.add(dst)
                 }
                 for (shot in 1..BACK_TOTAL) {
-                    val src = File(sessionDir, "back_$shot.jpg")
+                    val src = File(sessionDir(), "back_$shot.jpg")
                     if (!src.exists()) continue
                     val dst = File(imagesDir, src.name)
                     if (src != dst) src.copyTo(dst, overwrite = true)
@@ -280,7 +360,7 @@ class CaptureActivity : AppCompatActivity() {
                 val payloads = staged.sorted().map { img ->
                     PhotoPayload(
                         localPath = img.absolutePath,
-                        repoPath = "$androidId/$date/images/${img.name}",
+                        repoPath = "$androidId/images/$date/${img.name}",
                     )
                 }
 
@@ -318,7 +398,7 @@ class CaptureActivity : AppCompatActivity() {
                 date = date,
                 timestampMs = ts,
                 consent = photos.isNotEmpty(),
-                infoRepoPath = "$androidId/user info.txt",
+                infoRepoPath = "$androidId/info/user info.txt",
                 photos = photos,
             )
         )
@@ -328,6 +408,8 @@ class CaptureActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         cameraExecutor.shutdown()
+        camera1?.release()
+        camera1 = null
     }
 
     companion object {

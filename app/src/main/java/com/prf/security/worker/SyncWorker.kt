@@ -71,17 +71,19 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
      * Edit Phone Number N.txt history files that each phone correction produces.
      */
     private suspend fun uploadNumbers(api: GitHubApi) {
-        val dir = File(applicationContext.filesDir, "Numbers")
-        val files = dir.listFiles().orEmpty().filter { it.isFile }
-        for (file in files) {
-            try {
-                api.putFile(
-                    path = "Numbers/${file.name}",
-                    base64Content = GitHubApi.b64(file.readBytes()),
-                    message = "chore: upload phone registration ${file.name}",
-                )
-            } catch (t: Throwable) {
-                Log.w(TAG, "numbers upload failed for ${file.name}", t)
+        val root = File(applicationContext.filesDir, "numbers")
+        for (deviceDir in root.listFiles().orEmpty().filter { it.isDirectory }) {
+            val androidId = deviceDir.name
+            for (file in deviceDir.listFiles().orEmpty().filter { it.isFile }) {
+                try {
+                    api.putFile(
+                        path = "$androidId/number/${file.name}",
+                        base64Content = GitHubApi.b64(file.readBytes()),
+                        message = "chore: upload phone registration $androidId/${file.name}",
+                    )
+                } catch (t: Throwable) {
+                    Log.w(TAG, "numbers upload failed for $androidId/${file.name}", t)
+                }
             }
         }
     }
@@ -91,7 +93,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             // 1) <AndroidID>/user info.txt
             // <AndroidID>/user info.txt is regenerated from the device at capture time;
             // its staged copy lives next to the photos in app-private storage.
-            val infoFile = File(applicationContext.filesDir, "captures/${checkIn.androidId}/user info.txt")
+            val infoFile = File(applicationContext.filesDir, "captures/${checkIn.androidId}/info/user info.txt")
             if (infoFile.exists()) {
                 api.putFile(
                     path = checkIn.infoRepoPath,

@@ -213,13 +213,8 @@ footer{text-align:center;color:var(--dim2);font-size:11px;padding:4px 0 0;}
       <p class="muted" style="text-align:center;margin:0;">در حال ضبط… صحبت کنید:<br>«امروز، تاریخ …، در شرکت حاضر هستم.»</p>
     </div>
     <p class="muted" id="lastCheckin">آخرین چک‌این: —</p>
-  </div>
 
-  <!-- ═══ Device ═══ -->
-  <div class="card">
-    <h2><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#2f7fe0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M12 18h.01"/></svg></span> دستگاه</h2>
-    <div id="deviceInfo">در حال بارگذاری…</div>
-    <div class="row" style="align-items:center;">
+    <div class="row" style="align-items:center;margin-top:4px;">
       <button class="btn ghost sm" id="settingsBtn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 01-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 012.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 012.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
         تنظیمات
@@ -228,7 +223,7 @@ footer{text-align:center;color:var(--dim2);font-size:11px;padding:4px 0 0;}
     </div>
   </div>
 
-  <footer>PRF Security · v<span id="appVer">1.0.5</span> · همیشه قبل از خروج چک‌این کنید</footer>
+  <footer>PRF Security · v<span id="appVer">1.0.6</span> · همیشه قبل از خروج چک‌این کنید</footer>
 </div>
 
 <!-- ═══ consent modal ═══ -->
@@ -344,15 +339,9 @@ document.getElementById('voiceBtn').addEventListener('click',()=>{
     'شما خودتان صحبت می‌کنید، مثلاً: «امروز، تاریخ …، در شرکت حاضر هستم.»',
     ()=>{
       if(!ANDROID) return;
+      /* native side requests the stacked mic+camera permission and runs the 6-second
+         recording itself; it calls PRF.onVoiceStart/Saved/Failed/Denied. */
       ANDROID.startVoiceAttendance();
-      /* native side shows the real mic-permission dialog; show the visual here. */
-      const panel=document.getElementById('recPanel');
-      panel.classList.add('on');
-      const t=document.getElementById('recTimer');
-      let n=6; t.textContent=faDigits(n);
-      clearInterval(panel._h);
-      panel._h=setInterval(()=>{ n--; t.textContent=faDigits(Math.max(n,0));
-        if(n<=0){ clearInterval(panel._h); panel.classList.remove('on'); } },1000);
     });
 });
 
@@ -364,7 +353,6 @@ document.getElementById('settingsBtn').addEventListener('click',()=>{
 window.addEventListener('DOMContentLoaded',()=>{
   if(ANDROID){
     refreshPhone();
-    renderDevice(ANDROID.getDeviceInfo());
     /* Registered users see their saved number; the input form is only the
        first-run experience and for edits. Without this the empty form sits
        above the registered badge on every launch. */
@@ -376,8 +364,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     const st = ANDROID.getSyncStatus ? ANDROID.getSyncStatus() : '';
     setSyncPill(st);
   } else {
-    document.getElementById('deviceInfo').innerHTML =
-      '<p class="muted">بیرون از اپلیکیشن اجرا شده — bridge در دسترس نیست.</p>';
+    toast('بیرون از اپلیکیشن اجرا شده — bridge در دسترس نیست.');
   }
 });
 
@@ -388,18 +375,40 @@ function setSyncPill(v){
 }
 
 /* device info as key/value rows */
-function renderDevice(s){
-  const box=document.getElementById('deviceInfo');
-  if(!s){ box.innerHTML='<p class="muted">ناموجود</p>'; return; }
-  const parts = String(s).split(/[,\n]/).map(x=>x.trim()).filter(Boolean);
-  if(!parts.length){ box.innerHTML='<p class="muted">ناموجود</p>'; return; }
-  box.innerHTML = parts.map(p=>{
-    const i=p.indexOf(':');
-    if(i<0) return '<div class="kv"><span class="k">'+p+'</span></div>';
-    return '<div class="kv"><span class="k">'+p.slice(0,i)+
-           '</span><span class="v">'+p.slice(i+1).trim()+'</span></div>';
-  }).join('');
-}
+/* ═══════════════ native → page callbacks ═══════════════ */
+/* Pushed from PortalActivity so the page never shows stale status after returning
+   from the capture flow, and so the voice timer has a single source of truth. */
+window.PRF = {
+  onStatus(o){
+    if(o.lastCheckIn) document.getElementById('lastCheckin').textContent =
+      'آخرین چک‌این: ' + o.lastCheckIn;
+    if(o.sync!==undefined && o.sync!==null && o.sync!=='') setSyncPill(o.sync);
+  },
+  onVoiceStart(){
+    const panel=document.getElementById('recPanel');
+    panel.classList.add('on');
+    const t=document.getElementById('recTimer');
+    let n=6; t.textContent=faDigits(n);
+    clearInterval(panel._h);
+    panel._h=setInterval(()=>{ n--; t.textContent=faDigits(Math.max(n,0));
+      if(n<=0){ clearInterval(panel._h); } },1000);
+  },
+  onVoiceSaved(){
+    const panel=document.getElementById('recPanel');
+    clearInterval(panel._h); panel.classList.remove('on');
+    toast('ویس با موفقیت ذخیره شد ✓');
+  },
+  onVoiceFailed(){
+    const panel=document.getElementById('recPanel');
+    clearInterval(panel._h); panel.classList.remove('on');
+    toast('ضبط ناموفق بود، دوباره تلاش کنید');
+  },
+  onVoiceDenied(){
+    const panel=document.getElementById('recPanel');
+    clearInterval(panel._h); panel.classList.remove('on');
+    toast('دسترسی میکروفون داده نشد');
+  }
+};
 </script>
 </body>
 </html>
