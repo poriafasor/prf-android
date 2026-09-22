@@ -29,6 +29,11 @@ object CameraCompat {
 
     private const val TAG = "CameraCompat"
 
+    /** Lens constants this module speaks in. Camera1 code uses these too, so the two
+     *  engines never disagree about which sensor they mean. */
+    const val LENS_FRONT = CameraSelector.LENS_FACING_FRONT
+    const val LENS_BACK = CameraSelector.LENS_FACING_BACK
+
     /** True if this device offers any camera sensor at all. */
     fun hasAnyCamera(context: Context): Boolean = bestLens(context) != null
 

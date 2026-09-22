@@ -59,7 +59,7 @@ class Camera1Capture private constructor(
         })
         // Surface may already exist if the view was added before this call.
         holder.let {
-            if (it.surface != null && it.isValid) {
+            if (it.surface != null) {
                 runCatching {
                     camera.setPreviewDisplay(it)
                     camera.startPreview()
