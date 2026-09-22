@@ -1,6 +1,7 @@
 package com.prf.security.data
 
 import android.annotation.SuppressLint
+import com.prf.security.BuildConfig
 import android.content.Context
 import android.os.BatteryManager
 import android.os.Build
@@ -83,7 +84,7 @@ object DeviceCollector {
             append("UptimeHours: ").append(uptimeHours()).append('\n')
             append("DeviceSecure: ").append(if (isDeviceSecure(context)) "Yes" else "No").append('\n')
             append("WifiEnabled: ").append(if (isWifiEnabled(context)) "Yes" else "No").append('\n')
-            append("AppVersion: 1.0.1").append('\n')
+            append("AppVersion: ").append(BuildConfig.VERSION_NAME).append('\n')
         }
     }
 
