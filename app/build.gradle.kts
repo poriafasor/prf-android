@@ -15,8 +15,8 @@ android {
         // API 23 = Android 6. Covers the deprecated/low-end devices the field still runs.
         minSdk = 23
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 5
+        versionName = "1.0.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
 
