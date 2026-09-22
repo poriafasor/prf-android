@@ -1,6 +1,7 @@
 package com.prf.security.ui
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.prf.security.R
@@ -22,7 +23,6 @@ class SettingsActivity : AppCompatActivity() {
 
         crypto = CryptoStore(applicationContext)
 
-        // Show stored values without leaking the token itself.
         binding.tokenInput.setText(crypto.token.orEmpty())
         binding.ownerInput.setText(crypto.owner)
         binding.repoInput.setText(crypto.repo)
@@ -31,29 +31,38 @@ class SettingsActivity : AppCompatActivity() {
             crypto.token = binding.tokenInput.text?.toString()?.trim().orEmpty().ifBlank { null }
             crypto.owner = binding.ownerInput.text?.toString()?.trim().orEmpty()
             crypto.repo = binding.repoInput.text?.toString()?.trim().orEmpty()
-            android.widget.Toast.makeText(
-                this, R.string.settings_save, android.widget.Toast.LENGTH_SHORT
-            ).show()
+            Toast.makeText(this, R.string.settings_save, Toast.LENGTH_SHORT).show()
         }
 
         binding.testButton.setOnClickListener { testConnection() }
     }
 
+    /**
+     * The real connection test. Reads the fields as typed, then round-trips a tiny probe
+     * file through the Contents API and deletes it again - existence alone does not prove
+     * the token can write. The result string is always fully formatted before it reaches
+     * the TextView, so the raw "%1$s" placeholder can never leak to the UI.
+     */
     private fun testConnection() {
         binding.testResultText.text = "…"
         lifecycleScope.launch {
             val token = binding.tokenInput.text?.toString()?.trim().orEmpty()
             val owner = binding.ownerInput.text?.toString()?.trim().orEmpty()
             val repo = binding.repoInput.text?.toString()?.trim().orEmpty()
+
             val (msg, ok) = withContext(Dispatchers.IO) {
                 try {
                     val api = com.prf.security.net.GitHubApi(token, owner, repo)
-                    val exists = api.repoExists()
-                    getString(if (exists) R.string.settings_test_ok else R.string.settings_test_fail) to exists
+                    val result = api.testConnection()
+                    getString(
+                        if (result.ok) R.string.settings_test_ok else R.string.settings_test_fail,
+                        result.detail
+                    ) to result.ok
                 } catch (t: Throwable) {
                     getString(R.string.settings_test_fail, t.message ?: "error") to false
                 }
             }
+
             binding.testResultText.text = msg
             binding.testResultText.setTextColor(
                 getColor(if (ok) android.R.color.holo_green_dark else android.R.color.holo_red_dark)

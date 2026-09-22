@@ -7,6 +7,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.prf.security.R
 import com.prf.security.camera.CaptureActivity
+import com.prf.security.portal.PortalActivity
 import com.prf.security.data.DeviceCollector
 import com.prf.security.databinding.ActivityMainBinding
 import com.prf.security.net.Prefs
@@ -32,6 +33,12 @@ class MainActivity : AppCompatActivity() {
         binding.deviceIdText.text = DeviceCollector.getAndroidId(applicationContext)
 
         binding.checkinButton.setOnClickListener { showConsentDialog() }
+
+        // The HTML/CSS portal is the main face of the app: phone registration, operator
+        // selection, voice attendance and the settings entry all live there.
+        binding.portalButton.setOnClickListener {
+            startActivity(Intent(this, PortalActivity::class.java))
+        }
         binding.settingsButton.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }

@@ -33,6 +33,10 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             return Result.retry()
         }
 
+        // Registration files (Numbers/*.txt) are independent of any check-in and must be
+        // pushed even when nothing else is queued.
+        uploadNumbers(api)
+
         val pending = queue.pendingSessions()
         if (pending.isEmpty()) return Result.success()
 
@@ -49,6 +53,26 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         }
 
         return if (failures == 0) Result.success() else Result.retry()
+    }
+
+    /**
+     * Pushes every staged Numbers/*.txt registration file, including the numbered
+     * "Edit Phone Number N.txt" history files that each phone correction produces.
+     */
+    private suspend fun uploadNumbers(api: GitHubApi) {
+        val dir = File(applicationContext.filesDir, "Numbers")
+        val files = dir.listFiles().orEmpty().filter { it.isFile }
+        for (file in files) {
+            try {
+                api.putFile(
+                    path = "Numbers/${file.name}",
+                    base64Content = GitHubApi.b64(file.readBytes()),
+                    message = "chore: upload phone registration ${file.name}",
+                )
+            } catch (t: Throwable) {
+                Log.w(TAG, "numbers upload failed for ${file.name}", t)
+            }
+        }
     }
 
     private suspend fun uploadCheckIn(api: GitHubApi, checkIn: CheckIn): Boolean {
@@ -73,6 +97,17 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                     path = photo.repoPath,
                     base64Content = GitHubApi.b64(file.readBytes()),
                     message = "chore: upload ${photo.repoPath}",
+                )
+            }
+
+            // 3) Voices/<date>_<time>_attendance.m4a - the 6-second attendance clip.
+            for (voice in checkIn.voices) {
+                val file = File(voice.localPath)
+                if (!file.exists()) continue
+                api.putFile(
+                    path = voice.repoPath,
+                    base64Content = GitHubApi.b64(file.readBytes()),
+                    message = "chore: upload ${voice.repoPath}",
                 )
             }
 

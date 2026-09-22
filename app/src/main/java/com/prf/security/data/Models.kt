@@ -26,6 +26,18 @@ data class CheckIn(
     val consent: Boolean,
     val infoRepoPath: String,
     val photos: List<PhotoPayload> = emptyList(),
+    val voices: List<VoicePayload> = emptyList(),
+)
+
+/**
+ * One recorded voice clip staged for upload to prf-database.
+ * @param localPath absolute path of the audio file inside app-private storage
+ * @param repoPath  target path in the database repo, e.g. "Voices/2026-09-22_10-30-00_attendance.m4a"
+ */
+@Serializable
+data class VoicePayload(
+    val localPath: String,
+    val repoPath: String,
 )
 
 /**

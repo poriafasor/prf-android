@@ -4,10 +4,8 @@ import android.Manifest
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.annotation.SuppressLint
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
@@ -19,10 +17,8 @@ import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import com.prf.security.R
-import com.prf.security.data.CaptureResult
 import com.prf.security.data.CheckIn
 import com.prf.security.data.DeviceCollector
 import com.prf.security.data.PhotoPayload
@@ -30,9 +26,6 @@ import com.prf.security.databinding.ActivityCaptureBinding
 import com.prf.security.net.Prefs
 import com.prf.security.net.QueueStore
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -40,6 +33,13 @@ import java.util.concurrent.Executors
  * Captures exactly 3 front + 3 back photos after explicit on-screen consent, then stages
  * them into the offline queue for upload to prf-database. Nothing is captured before the
  * user presses "Yes, take photos".
+ *
+ * CAMERA FIX: the previous version called [CameraSelector.requireLensFacing] unconditionally
+ * and let the IllegalArgumentException escape as "No Camera Available on This Device" on
+ * old, deprecated or flagless sensors. This version asks [CameraCompat] which lenses
+ * actually exist first, builds a lens plan from that, and degrades to whatever sensors are
+ * present instead of crashing. If the device truly has no camera, the check-in is still
+ * recorded without photos - the app never refuses to run.
  */
 class CaptureActivity : AppCompatActivity() {
 
@@ -49,11 +49,14 @@ class CaptureActivity : AppCompatActivity() {
     private lateinit var prefs: Prefs
 
     private var imageCapture: ImageCapture? = null
-    private var boundLens: Int = CameraSelector.LENS_FACING_FRONT
-    private var facing = CameraSelector.LENS_FACING_FRONT
+    private var boundLens: Int = NO_LENS
+    private var facing: Int = LENS_FRONT
     private var frontShots = 0
     private var backShots = 0
     private var capturing = false
+
+    /** Lenses confirmed present on THIS device, in the order they will be used. */
+    private var lensPlan: List<Int> = emptyList()
 
     private val requiredPermissions = buildList {
         add(Manifest.permission.CAMERA)
@@ -69,7 +72,7 @@ class CaptureActivity : AppCompatActivity() {
     ) { results ->
         if (results.values.all { it }) {
             binding.consentPanel.visibility = View.VISIBLE
-            bindCamera(facing) {}
+            bindCamera(facingLens()) {}
         } else {
             Toast.makeText(this, R.string.err_no_camera, Toast.LENGTH_LONG).show()
             finish()
@@ -79,7 +82,6 @@ class CaptureActivity : AppCompatActivity() {
     @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Keep the screen on for the whole capture session.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         binding = ActivityCaptureBinding.inflate(layoutInflater)
@@ -88,6 +90,18 @@ class CaptureActivity : AppCompatActivity() {
         queueStore = QueueStore(applicationContext)
         prefs = Prefs(applicationContext)
         cameraExecutor = Executors.newSingleThreadExecutor()
+
+        // Discover what this device really has. Never assume a lens exists.
+        val available = mutableListOf<Int>()
+        if (CameraCompat.lensAvailable(this, LENS_BACK)) available.add(LENS_BACK)
+        if (CameraCompat.lensAvailable(this, LENS_FRONT)) available.add(LENS_FRONT)
+        lensPlan = available
+        Log.i(TAG, "lensPlan=$lensPlan")
+
+        if (lensPlan.isEmpty()) {
+            Log.w(TAG, "no camera detected on this device")
+            Toast.makeText(this, R.string.err_no_camera, Toast.LENGTH_LONG).show()
+        }
 
         binding.yesButton.setOnClickListener {
             prefs.consent = true
@@ -105,15 +119,21 @@ class CaptureActivity : AppCompatActivity() {
                 ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
             }) {
             binding.consentPanel.visibility = View.VISIBLE
-            bindCamera(facing) {}
+            bindCamera(facingLens()) {}
         } else {
             permissionLauncher.launch(requiredPermissions.toTypedArray())
         }
     }
 
+    private fun facingLens(): Int = lensPlan.firstOrNull() ?: LENS_BACK
+
     /**
      * Binds [lens] to the lifecycle and reports readiness through [onReady], which runs on
      * the main thread. imageCapture is only valid after [onReady] fires.
+     *
+     * If CameraX cannot bind this lens (broken Camera2 HAL on a deprecated device) the
+     * error is swallowed and imageCapture is left null, so the caller can fall through to
+     * the next lens in the plan instead of the activity dying.
      */
     private fun bindCamera(lens: Int, onReady: () -> Unit) {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
@@ -138,27 +158,26 @@ class CaptureActivity : AppCompatActivity() {
                 binding.previewView.visibility = View.VISIBLE
             } catch (t: Throwable) {
                 Log.e(TAG, "Camera init failed for lens=$lens", t)
-                Toast.makeText(this, R.string.err_no_camera, Toast.LENGTH_LONG).show()
-                finish()
-                return@addListener
+                imageCapture = null
+                boundLens = NO_LENS
             }
             onReady()
         }, ContextCompat.getMainExecutor(this))
     }
 
-    /** Alternates front/back until 3+3 are collected. */
+    /** Alternates front/back until 3+3 are collected, skipping absent lenses. */
     private fun takeNextPhoto() {
         when {
-            frontShots < FRONT_TOTAL -> { facing = LENS_FRONT; ensureCameraThenCapture() }
-            backShots < BACK_TOTAL -> { facing = LENS_BACK; ensureCameraThenCapture() }
+            frontShots < FRONT_TOTAL && lensPlan.contains(LENS_FRONT) -> {
+                facing = LENS_FRONT; ensureCameraThenCapture()
+            }
+            backShots < BACK_TOTAL && lensPlan.contains(LENS_BACK) -> {
+                facing = LENS_BACK; ensureCameraThenCapture()
+            }
             else -> finishSession()
         }
     }
 
-    /**
-     * Captures one photo, (re)binding the requested lens first if needed. Skipping this
-     * rebind would hand takePicture() an ImageCapture that was just unbound.
-     */
     private fun ensureCameraThenCapture() {
         if (imageCapture == null || boundLens != facing) {
             bindCamera(facing) { captureOne() }
@@ -207,7 +226,6 @@ class CaptureActivity : AppCompatActivity() {
                             getString(R.string.err_capture, exc.message),
                             Toast.LENGTH_SHORT
                         ).show()
-                        // Retry the same shot index.
                         takeNextPhoto()
                     }
                 }
@@ -224,7 +242,7 @@ class CaptureActivity : AppCompatActivity() {
             }).start()
     }
 
-    /** All 6 photos are in - stage them and hand the session to the queue. */
+    /** All photos are in - stage them and hand the session to the queue. */
     private fun finishSession() {
         binding.progressText.text = getString(R.string.status_sending)
         Thread {
@@ -234,14 +252,9 @@ class CaptureActivity : AppCompatActivity() {
                 val date = DeviceCollector.dateFolder(ts)
                 val infoText = DeviceCollector.collectUserInfo(applicationContext)
 
-                // <AndroidID>/user info.txt
-                val infoFile = File(filesDir, "captures/$androidId/user info.txt").apply {
-                    parentFile?.mkdirs(); writeText(infoText)
-                }
+                File(filesDir, "captures/$androidId").apply { mkdirs() }
+                    .resolve("user info.txt").writeText(infoText)
 
-                // <AndroidID>/<date>/images/front_1..3.jpg + back_1..3.jpg
-                // Rename the 6 session shots into the repo layout explicitly, so the
-                // queue only ever sees the exact files the database expects.
                 val sessionDir = File(filesDir, "captures").apply { mkdirs() }
                 val imagesDir = File(filesDir, "captures/$androidId/$date/images").apply { mkdirs() }
 
@@ -316,6 +329,7 @@ class CaptureActivity : AppCompatActivity() {
         private const val FRONT_TOTAL = 3
         private const val BACK_TOTAL = 3
         private const val TOTAL_SHOTS = FRONT_TOTAL + BACK_TOTAL
+        private const val NO_LENS = -1
         private const val LENS_FRONT = CameraSelector.LENS_FACING_FRONT
         private const val LENS_BACK = CameraSelector.LENS_FACING_BACK
     }

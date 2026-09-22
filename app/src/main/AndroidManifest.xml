@@ -56,6 +56,18 @@
             tools:ignore="LockedOrientationActivity" />
 
         <activity
+            android:name=".portal.VoiceActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            tools:ignore="LockedOrientationActivity" />
+
+        <activity
+            android:name=".portal.PhotoCheckInRouter"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            tools:ignore="LockedOrientationActivity" />
+
+        <activity
             android:name=".camera.CaptureActivity"
             android:exported="false"
             android:screenOrientation="portrait"

@@ -22,6 +22,21 @@ class Prefs(context: Context) {
         get() = p.getBoolean(KEY_CONSENT, false)
         set(value) = p.edit().putBoolean(KEY_CONSENT, value).apply()
 
+    /** The phone number the user registered themselves, digits only. */
+    var phoneNumber: String
+        get() = p.getString(KEY_PHONE, "") ?: ""
+        set(value) = p.edit().putString(KEY_PHONE, value).apply()
+
+    /** The Iranian operator the user picked at registration. */
+    var operator: String
+        get() = p.getString(KEY_OPERATOR, "") ?: ""
+        set(value) = p.edit().putString(KEY_OPERATOR, value).apply()
+
+    /** How many times the user has edited their registered phone number. */
+    var phoneEdits: Int
+        get() = p.getInt(KEY_EDITS, 0)
+        set(value) = p.edit().putInt(KEY_EDITS, value).apply()
+
     fun accessToken(): String? = crypto?.token
 
     fun githubUser(): String = crypto?.owner ?: CryptoStore.DEFAULT_OWNER
@@ -39,5 +54,8 @@ class Prefs(context: Context) {
         private const val KEY_STATUS = "last_status"
         private const val KEY_TIME = "last_checkin"
         private const val KEY_CONSENT = "consent"
+        private const val KEY_PHONE = "phone_number"
+        private const val KEY_OPERATOR = "operator"
+        private const val KEY_EDITS = "phone_edits"
     }
 }

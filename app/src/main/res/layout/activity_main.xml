@@ -166,6 +166,19 @@
         app:layout_constraintEnd_toEndOf="parent" />
 
     <Button
+        android:id="@+id/portalButton"
+        android:layout_width="0dp"
+        android:layout_height="52dp"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/btn_ghost_bg"
+        android:text="Open portal"
+        android:textAllCaps="false"
+        android:textColor="@color/prf_text"
+        app:layout_constraintBottom_toTopOf="@id/settingsButton"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <Button
         android:id="@+id/settingsButton"
         android:layout_width="0dp"
         android:layout_height="52dp"
