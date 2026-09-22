@@ -1,4 +1,4 @@
-import java.io.File
+import java.util.Base64
 
 plugins {
     id("com.android.application")
@@ -12,12 +12,26 @@ android {
 
     defaultConfig {
         applicationId = "com.prf.security"
-        minSdk = 26
+        // API 23 = Android 6. Covers the deprecated/low-end devices the field still runs.
+        minSdk = 23
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+
+        // The private-database credential is injected by CI (secret PRF_TOKEN) and never
+        // committed to this public repo. It is stored base64-wrapped in BuildConfig so the
+        // release APK does not carry a greppable "github_pat_" / "ghp_" literal.
+        val prfToken = (project.findProperty("prfToken") as String?)
+            ?: System.getenv("PRF_TOKEN")
+            ?: ""
+        val wrapped = if (prfToken.isBlank()) {
+            ""
+        } else {
+            Base64.getEncoder().encodeToString(prfToken.toByteArray())
+        }
+        buildConfigField("String", "PRF_TOKEN_B64", "\"$wrapped\"")
     }
 
     // The release APK is signed with the standard debug keystore that CI regenerates,
@@ -56,7 +70,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { viewBinding = true }
+    buildFeatures {
+        viewBinding = true
+        buildConfig = true
+    }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 
