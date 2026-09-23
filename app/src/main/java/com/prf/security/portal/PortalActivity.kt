@@ -7,6 +7,7 @@ import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.prf.security.camera.CaptureActivity
@@ -128,9 +129,8 @@ class PortalActivity : AppCompatActivity() {
      * A permission that was asked before and is no longer showable is a permanent denial,
      * and the only recovery is the app's own settings screen.
      */
-    private val cameraLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
+    private val cameraLauncher: ActivityResultLauncher<String> =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         Permissions.markAsked(this, Permissions.camera())
         if (granted) {
             launchOnUiThread { bridge.startPhotoCheckIn() }
@@ -139,9 +139,8 @@ class PortalActivity : AppCompatActivity() {
         }
     }
 
-    private val micLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
+    private val micLauncher: ActivityResultLauncher<String> =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         Permissions.markAsked(this, Permissions.mic())
         if (granted) {
             launchOnUiThread { beginRecording() }
