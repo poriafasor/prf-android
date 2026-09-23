@@ -75,3 +75,9 @@ button.danger:hover { filter: brightness(1.15); }
   border-radius: 10px; padding: 11px 20px; font-size: 14px; z-index: 60;
   box-shadow: 0 8px 30px rgba(0,0,0,.5); }
 .toast.bad { border-color: var(--bad); }
+
+
+/* ═══ v2.1: live status pill ═══ */
+.pill { font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  background: rgba(53,196,141,.14); color: var(--ok); border: 1px solid rgba(53,196,141,.45);
+  border-radius: 999px; padding: 4px 12px; white-space: nowrap; }

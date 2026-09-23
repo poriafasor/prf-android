@@ -7,7 +7,9 @@ import android.os.Build
 import android.util.Base64
 import android.util.Log
 import androidx.work.Configuration
+import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.prf.security.net.CryptoStore
@@ -76,12 +78,24 @@ class PRFApp : Application(), Configuration.Provider {
     }
 
     private fun scheduleSync() {
+        // Only ever run on a live connection: a sync pass with no network is guaranteed
+        // failure, and WorkManager would otherwise burn retries waiting for one.
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        // UPDATE, not KEEP: a new app version may carry a new worker contract, and KEEP
+        // would keep the previously scheduled request as-is instead of this one.
         val request = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(constraints)
             .addTag(SyncWorker.WORK_NAME)
             .build()
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            SyncWorker.WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request
+            SyncWorker.WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request
         )
+
+        // Drain whatever the previous version queued, now, under the new worker.
+        SyncWorker.enqueueNow(this)
     }
 
     override val workManagerConfiguration: Configuration

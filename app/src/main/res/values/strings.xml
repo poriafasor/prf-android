@@ -8,6 +8,7 @@
     <string name="status_capturing">Capturing photos… (%1$d / %2$d)</string>
     <string name="status_sending">Sending to database…</string>
     <string name="status_done">Check-in complete</string>
+    <string name="err_camera_blocked">Camera access is blocked. Enable it for PRF Security in app settings.</string>
     <string name="status_queued">Saved offline - will sync when online (%1$d pending)</string>
     <string name="status_declined">Check-in recorded without photos</string>
     <string name="status_error">Check-in failed: %1$s</string>

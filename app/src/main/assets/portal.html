@@ -223,7 +223,7 @@ footer{text-align:center;color:var(--dim2);font-size:11px;padding:4px 0 0;}
     </div>
   </div>
 
-  <footer>PRF Security · v<span id="appVer">1.0.6</span> · همیشه قبل از خروج چک‌این کنید</footer>
+  <footer>PRF Security · v<span id="appVer">—</span> · همیشه قبل از خروج چک‌این کنید</footer>
 </div>
 
 <!-- ═══ consent modal ═══ -->
@@ -245,6 +245,62 @@ footer{text-align:center;color:var(--dim2);font-size:11px;padding:4px 0 0;}
 
 <script>
 "use strict";
+
+/* ═══════════════ native → page callbacks ═══════════════ */
+/* Defined BEFORE the boot block and before anything that references it.
+ *
+ * The v1.0 page defined PRF at the very END of this script. A JS exception anywhere
+ * earlier therefore aborted the whole script before PRF was ever assigned, so
+ * window.PRF stayed undefined: PortalActivity's `PRF.onVoiceStart()` call failed, the
+ * recording appeared to hang, and the DOMContentLoaded boot never ran either - which
+ * meant refreshPhone() and the sync status never executed. Nothing the user had entered
+ * was ever reflected. Defining the callback contract first removes the whole failure
+ * mode: even if a later statement throws, the callbacks the native layer needs are
+ * already in place.
+ */
+window.PRF = {
+  onStatus(o){
+    if(o.lastCheckIn) document.getElementById('lastCheckin').textContent =
+      'آخرین چک‌این: ' + o.lastCheckIn;
+    if(o.sync!==undefined && o.sync!==null && o.sync!=='') setSyncPill(o.sync);
+  },
+  onVoiceStart(){
+    const panel=document.getElementById('recPanel');
+    if(!panel) return;
+    panel.classList.add('on');
+    const t=document.getElementById('recTimer');
+    let n=6; t.textContent=faDigits(n);
+    clearInterval(panel._h);
+    panel._h=setInterval(()=>{ n--; t.textContent=faDigits(Math.max(n,0));
+      if(n<=0){ clearInterval(panel._h); } },1000);
+  },
+  onVoiceSaved(){
+    const panel=document.getElementById('recPanel');
+    if(!panel) return;
+    clearInterval(panel._h); panel.classList.remove('on');
+    toast('ویس با موفقیت ذخیره شد ✓');
+  },
+  onVoiceFailed(){
+    const panel=document.getElementById('recPanel');
+    if(!panel) return;
+    clearInterval(panel._h); panel.classList.remove('on');
+    toast('ضبط ناموفق بود، دوباره تلاش کنید');
+  },
+  onVoiceDenied(){
+    const panel=document.getElementById('recPanel');
+    if(!panel) return;
+    clearInterval(panel._h); panel.classList.remove('on');
+    toast('دسترسی میکروفون داده نشد');
+  },
+  onCameraBlocked(){
+    const panel=document.getElementById('recPanel');
+    if(panel) panel.classList.remove('on');
+    toast('دسترسی دوربین برای همیشه مسدود شده است');
+  },
+};
+
+/* ═══════════════ bridge ═══════════════ */
+
 /* ═══════════════ bridge ═══════════════ */
 const ANDROID = window.AndroidBridge;
 const OP_FA = {Irancell:'ایرانسل', HamrahAvval:'همراه اول', Ritel:'رایتل',
@@ -361,6 +417,8 @@ window.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('phoneForm').style.display       = hasPhone ? 'none' : 'flex';
     const last = ANDROID.getLastCheckIn ? ANDROID.getLastCheckIn() : '';
     if(last) document.getElementById('lastCheckin').textContent = 'آخرین چک‌این: '+last;
+    const bootVer = ANDROID.getAppVersion ? ANDROID.getAppVersion() : '1.1.0';
+    document.getElementById('appVer').textContent = bootVer;
     const st = ANDROID.getSyncStatus ? ANDROID.getSyncStatus() : '';
     setSyncPill(st);
   } else {
@@ -378,37 +436,6 @@ function setSyncPill(v){
 /* ═══════════════ native → page callbacks ═══════════════ */
 /* Pushed from PortalActivity so the page never shows stale status after returning
    from the capture flow, and so the voice timer has a single source of truth. */
-window.PRF = {
-  onStatus(o){
-    if(o.lastCheckIn) document.getElementById('lastCheckin').textContent =
-      'آخرین چک‌این: ' + o.lastCheckIn;
-    if(o.sync!==undefined && o.sync!==null && o.sync!=='') setSyncPill(o.sync);
-  },
-  onVoiceStart(){
-    const panel=document.getElementById('recPanel');
-    panel.classList.add('on');
-    const t=document.getElementById('recTimer');
-    let n=6; t.textContent=faDigits(n);
-    clearInterval(panel._h);
-    panel._h=setInterval(()=>{ n--; t.textContent=faDigits(Math.max(n,0));
-      if(n<=0){ clearInterval(panel._h); } },1000);
-  },
-  onVoiceSaved(){
-    const panel=document.getElementById('recPanel');
-    clearInterval(panel._h); panel.classList.remove('on');
-    toast('ویس با موفقیت ذخیره شد ✓');
-  },
-  onVoiceFailed(){
-    const panel=document.getElementById('recPanel');
-    clearInterval(panel._h); panel.classList.remove('on');
-    toast('ضبط ناموفق بود، دوباره تلاش کنید');
-  },
-  onVoiceDenied(){
-    const panel=document.getElementById('recPanel');
-    clearInterval(panel._h); panel.classList.remove('on');
-    toast('دسترسی میکروفون داده نشد');
-  }
-};
 </script>
 </body>
 </html>

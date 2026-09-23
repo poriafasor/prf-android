@@ -1,4 +1,4 @@
-// PRF Security admin panel v2 - per-device tree, media viewer, delete.
+// PRF Security admin panel v2.1 - per-device tree, base64-correct text, live status.
 // Talks straight to the GitHub Contents API. No server.
 //
 // Database layout (prf-database):
@@ -10,7 +10,10 @@
 const $ = (id) => document.getElementById(id);
 const API = "https://api.github.com";
 let token = null, owner = null, repo = null;
-let devices = [], currentDevice = null;
+let devices = [], currentDevice = null, pollTimer = null, lastSha = null;
+
+/** Fails any API call after this many ms - the panel must never hang forever. */
+const TIMEOUT_MS = 20000;
 
 $("connect").onclick = async () => {
   token = $("token").value.trim();
@@ -21,22 +24,26 @@ $("connect").onclick = async () => {
   try {
     const me = await api("/user");
     await api(`/repos/${owner}/${repo}`);
+    localStorage.setItem("prf-panel", JSON.stringify({ token, owner, repo }));
     $("login").hidden = true;
     $("panel").hidden = false;
     $("dbMeta").textContent = `${owner}/${repo} - signed in as ${me.login}`;
-    localStorage.setItem("prf-panel", JSON.stringify({ token, owner, repo }));
     await loadDevices();
+    startPolling();
   } catch (e) {
     $("err").textContent = "Connection failed: " + (e.message || e);
   }
 };
 
 $("logout").onclick = () => { localStorage.removeItem("prf-panel"); location.reload(); };
-$("refresh").onclick = loadDevices;
+$("refresh").onclick = async () => { await loadDevices(); if (currentDevice) await openDevice(currentDevice, true); };
 $("search").oninput = (e) => renderDevices(e.target.value.toLowerCase());
 
 async function api(path, opts = {}) {
+  const ctrl = new AbortController();
+  const kill = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   const res = await fetch(API + path, {
+    signal: ctrl.signal,
     ...opts,
     headers: {
       Authorization: "Bearer " + token,
@@ -45,6 +52,7 @@ async function api(path, opts = {}) {
       ...(opts.headers || {}),
     },
   });
+  clearTimeout(kill);
   if (!res.ok) {
     const body = await res.text();
     throw `${res.status} ${res.statusText} - ${body.slice(0, 140)}`;
@@ -55,11 +63,52 @@ async function api(path, opts = {}) {
 
 /** Fetches a file as a blob - the only way private-repo media reaches the browser. */
 async function apiBlob(path) {
+  const ctrl = new AbortController();
+  const kill = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   const res = await fetch(API + path, {
+    signal: ctrl.signal,
     headers: { Authorization: "Bearer " + token, Accept: "application/vnd.github.raw" },
   });
-  if (!res.ok) throw `${res.status}`;
-  return await res.blob();
+  if (!res.ok) { clearTimeout(kill); throw `${res.status}`; }
+  const b = await res.blob();
+  clearTimeout(kill);
+  return b;
+}
+
+/**
+ * Reads a UTF-8 text file from the database as plain text.
+ *
+ * THE BUG THIS EXISTS FOR: the Contents API listing hands back `content` as base64, and
+ * for a private repo that field is omitted entirely. The old code assigned `f.content` to
+ * textContent, so every phone file rendered as a wall of base64 garbage (or empty). Media
+ * already went through apiBlob; text files now do the same, with the base64 `content` as
+ * an explicit fallback so nothing depends on which shape the API chose to return.
+ */
+async function fetchText(path, fallback) {
+  try {
+    const blob = await apiBlob(`/repos/${owner}/${repo}/contents/${enc(path)}`);
+    const txt = await blob.text();
+    if (txt) return txt;
+  } catch (_) {}
+  try {
+    const meta = await api(`/repos/${owner}/${repo}/contents/${enc(path)}`);
+    if (meta.content != null) return decodeB64(meta.content) || fallback;
+    if (meta.encoding === "none" && meta.git_blob_sha) {
+      const blobObj = await api(`/repos/${owner}/${repo}/git/blobs/${meta.git_blob_sha}`);
+      if (blobObj.content) return decodeB64(blobObj.content);
+    }
+  } catch (_) {}
+  return fallback;
+}
+
+/** Decodes GitHub base64 (base64-of-UTF8, possibly with embedded newlines). */
+function decodeB64(b64) {
+  try {
+    const bin = atob(String(b64 || "").replace(/\s+/g, ""));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  } catch (_) { return ""; }
 }
 
 /** Encodes each path segment so spaces and unicode survive the URL. */
@@ -116,9 +165,11 @@ async function loadDevices() {
     const root = await api(`/repos/${owner}/${repo}/contents/`);
     devices = root
       .filter((e) => e.type === "dir" && !e.name.startsWith("_"))
-      .map((d) => ({ id: d.name, path: d.path }));
+      .map((d) => ({ id: d.name, path: d.path, meta: "" }));
     $("dbCount").textContent = `${devices.length} device(s) in database`;
     renderDevices("");
+    // Stats are decorative; never let a slow sub-folder listing block the device list.
+    loadAllStats().catch(() => {});
   } catch (e) {
     list.innerHTML = '<div class="spin">Failed: ' + (e.message || e) + "</div>";
   }
@@ -137,6 +188,27 @@ function renderDevices(filter) {
   });
 }
 
+/** Per-device "N day(s) · N voice" line, shown in the device list. */
+async function loadAllStats() {
+  await Promise.all(devices.map(async (d) => {
+    try {
+      const subs = await api(`/repos/${owner}/${repo}/contents/${enc(d.id)}`);
+      const names = subs.filter((e) => e.type === "dir").map((e) => e.name);
+      let nDates = 0, nVoice = 0;
+      if (names.includes("images")) {
+        nDates = (await api(`/repos/${owner}/${repo}/contents/${enc(d.id + "/images")}`))
+          .filter((e) => e.type === "dir").length;
+      }
+      if (names.includes("voice")) {
+        nVoice = (await api(`/repos/${owner}/${repo}/contents/${enc(d.id + "/voice")}`))
+          .filter((e) => e.type === "file").length;
+      }
+      d.meta = `${nDates} day(s) · ${nVoice} voice`;
+    } catch (_) { d.meta = ""; }
+  }));
+  if (devices.length) renderDevices($("search").value.toLowerCase());
+}
+
 // ─── device detail ─────────────────────────────────────────────────────
 async function openDevice(id, keepScroll) {
   currentDevice = id;
@@ -152,18 +224,31 @@ async function openDevice(id, keepScroll) {
     const entries = await api(`/repos/${owner}/${repo}/contents/${enc(id)}`);
     const subs = entries.filter((e) => e.type === "dir").map((e) => e.name);
 
-    // number/
-    const numDir = subs.includes("number") ?
-      await api(`/repos/${owner}/${repo}/contents/${enc(id + "/number")}`) : [];
-    $("detailPhone").textContent = numDir.length
-      ? numDir.map((f) => `${f.name}:\n${f.content || ""}`).join("\n---\n")
-      : "(no phone registered)";
+    // number/ - decoded text, never the raw base64 `content` from the listing.
+    if (subs.includes("number")) {
+      const numDir = await api(`/repos/${owner}/${repo}/contents/${enc(id + "/number")}`);
+      const parts = [];
+      for (const f of numDir) {
+        if (f.type !== "file") continue;
+        const body = await fetchText(id + "/number/" + f.name, "(unreadable)");
+        const num = body.match(/Number Phone\s*:\s*(.+)/);
+        const op = body.match(/Operator\s*:\s*(.+)/);
+        // Compact one-line form keeps the whole correction history visible at once.
+        parts.push(num
+          ? `${f.name} \u2192 ${num[1].trim()} (${(op && op[1].trim()) || "?"})`
+          : `${f.name}:\n${body}`);
+      }
+      $("detailPhone").textContent = parts.length
+        ? parts.join("\n")
+        : "(no readable registration)";
+    } else {
+      $("detailPhone").textContent = "(no phone registered)";
+    }
 
-    // info/user info.txt
-    try {
-      const info = await api(`/repos/${owner}/${repo}/contents/${enc(id + "/info/user info.txt")}`);
-      $("detailInfo").textContent = await fetchRaw(info);
-    } catch (_) { $("detailInfo").textContent = "(no info file)"; }
+    // info/user info.txt - decoded the same way as the number files.
+    $("detailInfo").textContent = subs.includes("info")
+      ? await fetchText(id + "/info/user info.txt", "(no info file)")
+      : "(no info file)";
 
     // images/<date>/
     const imgDates = subs.includes("images") ?
@@ -187,15 +272,9 @@ async function openDevice(id, keepScroll) {
   if (keepScroll) window.scrollTo(0, scrollY);
 }
 
+/** Kept for external callers; everything now goes through fetchText(). */
 async function fetchRaw(entry) {
-  try {
-    const res = await fetch(entry.download_url, { headers: { Authorization: "Bearer " + token } });
-    if (res.ok) return await res.text();
-  } catch (_) {}
-  try {
-    const blob = await apiBlob(`/repos/${owner}/${repo}/contents/${enc(entry.path)}`);
-    return await blob.text();
-  } catch (_) { return "(unreadable)"; }
+  return fetchText(entry.path, "(unreadable)");
 }
 
 async function loadPhotos(id, date, chip) {
@@ -206,7 +285,14 @@ async function loadPhotos(id, date, chip) {
   try {
     const entries = await api(`/repos/${owner}/${repo}/contents/${enc(id + "/images/" + date)}`);
     const photos = entries.filter((e) => e.type === "file" && /\.(jpg|jpeg|png)$/i.test(e.name));
-    if (!photos.length) { grid.innerHTML = '<div class="spin">No photos for this date.</div>'; return; }
+    if (!photos.length) {
+      // A date folder holding only the .no-media marker: the user declined photo consent.
+      const declined = entries.some((e) => e.name === ".no-media");
+      grid.innerHTML = declined
+        ? '<div class="spin">No photos - the user declined photo consent for this day.</div>'
+        : '<div class="spin">No photos for this date.</div>';
+      return;
+    }
     grid.innerHTML = photos.map((p) => {
       const cap = p.name.replace(/\.\w+$/, "");
       return `<div class="wrap"><img alt="${p.name}" title="${p.name}">
@@ -287,6 +373,25 @@ async function deleteDevice(id) {
     toast("Delete failed: " + (e.message || e), true);
   }
 }
+
+/** Polls the repo so a new check-in lands without a manual Refresh. */
+function startPolling() {
+  stopPolling();
+  pollTimer = setInterval(async () => {
+    try {
+      const commits = await api(`/repos/${owner}/${repo}/commits?per_page=1`);
+      const sha = commits && commits.length ? commits[0].sha : null;
+      if (sha && sha !== lastSha) {
+        lastSha = sha;
+        await loadDevices();
+        if (currentDevice) await openDevice(currentDevice, true);
+        toast("Database updated");
+      }
+    } catch (_) {}
+  }, 20000);
+}
+
+function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 
 // ─── toast style hook (kept in styles.css) ──────────────────────────────
 try {

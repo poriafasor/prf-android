@@ -1,11 +1,8 @@
 package com.prf.security.camera
 
-import android.Manifest
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.annotation.SuppressLint
-import android.content.pm.PackageManager
-import android.os.Build
 import android.util.Log
 import android.view.View
 import android.os.Bundle
@@ -27,6 +24,8 @@ import com.prf.security.data.PhotoPayload
 import com.prf.security.databinding.ActivityCaptureBinding
 import com.prf.security.net.Prefs
 import com.prf.security.net.QueueStore
+import com.prf.security.perm.Permissions
+import com.prf.security.worker.SyncWorker
 import java.io.File
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -35,6 +34,13 @@ import java.util.concurrent.Executors
  * Captures exactly 3 front + 3 back photos after explicit on-screen consent, then stages
  * them into the offline queue for upload to prf-database. Nothing is captured before the
  * user presses "Yes, take photos".
+ *
+ * PERMISSION FIX: the previous version stacked CAMERA + RECORD_AUDIO into one
+ * `RequestMultiplePermissions` batch. On Android 11+ only the first dialog of a batch is
+ * shown and the result map is missing every permission the user was never asked about;
+ * that absent entry is not a `false`, so a denied camera made the whole batch fail and
+ * the mic silently never recorded. Here CAMERA is asked for on its own - one dialog, one
+ * answer - and the grant state is read back from the OS, never from the result map.
  *
  * CAMERA FIX: the previous version called [CameraSelector.requireLensFacing] unconditionally
  * and let the IllegalArgumentException escape as "No Camera Available on This Device" on
@@ -72,34 +78,29 @@ class CaptureActivity : AppCompatActivity() {
     private var lensPlan: List<Int> = emptyList()
 
     /**
-     * Stacked permission request: CAMERA + RECORD_AUDIO are asked for in ONE system
-     * dialog instead of two separate prompts at two different moments. The user answers
-     * once, and the later voice-attendance flow never has to ask again.
+     * CAMERA on its own. The mic is never part of this request: the voice flow asks for it
+     * separately, from the portal, so a refused camera cannot strand the mic in an
+     * undefined state the way the v1.0 stacked batch did.
      */
-    private val requiredPermissions = buildList {
-        add(Manifest.permission.CAMERA)
-        add(Manifest.permission.RECORD_AUDIO)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            add(Manifest.permission.READ_MEDIA_IMAGES)
-        } else {
-            add(Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
-    }
-
-    private val permissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        // CAMERA is the hard requirement; the mic is a convenience ask so the later
-        // voice-attendance flow does not need its own separate prompt.
-        val cameraGranted = results[Manifest.permission.CAMERA] == true
-        if (cameraGranted) {
+    private val cameraLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        Permissions.markAsked(this, Permissions.camera())
+        if (Permissions.isGranted(this, Permissions.camera())) {
             binding.consentPanel.visibility = View.VISIBLE
             bindCamera(facingLens()) {}
+        } else if (Permissions.isPermanentlyDenied(this, Permissions.camera())) {
+            Toast.makeText(this, R.string.err_camera_blocked, Toast.LENGTH_LONG).show()
+            finish()
         } else {
             Toast.makeText(this, R.string.err_no_camera, Toast.LENGTH_LONG).show()
             finish()
         }
     }
+
+    /** True when the camera is usable right now, read from the OS, not a result map. */
+    private fun cameraGranted(): Boolean =
+        Permissions.isGranted(this, Permissions.camera())
 
     @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -137,13 +138,14 @@ class CaptureActivity : AppCompatActivity() {
             finish()
         }
 
-        if (requiredPermissions.all {
-                ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-            }) {
+        if (cameraGranted()) {
             binding.consentPanel.visibility = View.VISIBLE
             bindCamera(facingLens()) {}
+        } else if (Permissions.isPermanentlyDenied(this, Permissions.camera())) {
+            Toast.makeText(this, R.string.err_camera_blocked, Toast.LENGTH_LONG).show()
+            finish()
         } else {
-            permissionLauncher.launch(requiredPermissions.toTypedArray())
+            cameraLauncher.launch(Permissions.camera())
         }
     }
 
@@ -336,8 +338,8 @@ class CaptureActivity : AppCompatActivity() {
                 // and <AndroidID>/info/user info.txt
                 val baseDir = File(filesDir, "captures/$androidId").apply { mkdirs() }
                 val imagesDir = File(baseDir, "images/$date").apply { mkdirs() }
-                File(baseDir, "info").apply { mkdirs() }
-                    .resolve("user info.txt").writeText(infoText)
+                val infoFile = File(baseDir, "info").apply { mkdirs() }
+                    .resolve("user info.txt").apply { writeText(infoText) }
 
                 val staged = mutableListOf<File>()
                 for (shot in 1..FRONT_TOTAL) {
@@ -364,7 +366,7 @@ class CaptureActivity : AppCompatActivity() {
                     )
                 }
 
-                queueCheckIn(payloads)
+                queueCheckIn(payloads, infoLocal = infoFile.absolutePath)
                 prefs.lastCheckIn = ts
                 prefs.lastStatus = getString(R.string.status_done)
                 // The HTML portal shows this verbatim, so it must be a readable stamp,
@@ -387,10 +389,31 @@ class CaptureActivity : AppCompatActivity() {
         }.start()
     }
 
-    private fun queueCheckIn(photos: List<PhotoPayload>) {
+    /**
+     * Enqueues the check-in. Photos carry consent; when the user declined, a `.no-media`
+     * marker is staged into the date folder instead. Git keeps no empty directory, so
+     * without that marker a declined check-in would leave no trace of the date at all and
+     * the panel would never show it.
+     */
+    private fun queueCheckIn(
+        photos: List<PhotoPayload>,
+        infoLocal: String? = null,
+    ) {
         val ts = System.currentTimeMillis()
         val androidId = DeviceCollector.getAndroidId(applicationContext)
         val date = DeviceCollector.dateFolder(ts)
+
+        // No staged photos -> the date folder needs an anchor file or it will not exist.
+        var markerRepo: String? = null
+        var markerLocal: String? = null
+        if (photos.isEmpty()) {
+            val marker = File(filesDir, "captures/$androidId/images/$date/$NO_MEDIA_FILE")
+            marker.parentFile?.mkdirs()
+            marker.writeText("no photos captured\n")
+            markerLocal = marker.absolutePath
+            markerRepo = "$androidId/images/$date/$NO_MEDIA_FILE"
+        }
+
         queueStore.enqueue(
             CheckIn(
                 id = ts.toString(),
@@ -399,9 +422,15 @@ class CaptureActivity : AppCompatActivity() {
                 timestampMs = ts,
                 consent = photos.isNotEmpty(),
                 infoRepoPath = "$androidId/info/user info.txt",
+                infoLocalPath = infoLocal
+                    ?: File(filesDir, "captures/$androidId/info/user info.txt").absolutePath,
                 photos = photos,
+                markerRepoPath = markerRepo,
+                markerLocalPath = markerLocal,
             )
         )
+        // Do not wait up to 15 minutes for the periodic pass.
+        SyncWorker.enqueueNow(applicationContext)
         Log.i(TAG, "check-in queued with ${photos.size} photo(s)")
     }
 
