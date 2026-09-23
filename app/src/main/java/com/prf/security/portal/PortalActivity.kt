@@ -45,6 +45,12 @@ class PortalActivity : AppCompatActivity() {
     private var recording = false
 
     /**
+     * Held as a field so the activity-result launchers can call back into it: the
+     * permission callbacks run on the activity, not on the bridge that JS talks to.
+     */
+    private val bridge = Bridge()
+
+    /**
      * Every @JavascriptInterface method is invoked by WebView on a private Binder thread,
      * not the main thread. Anything that touches the UI or an activity-result launcher
      * must hop back first, otherwise it crashes the app the moment the button is pressed.
@@ -69,7 +75,7 @@ class PortalActivity : AppCompatActivity() {
             settings.builtInZoomControls = false
             settings.mediaPlaybackRequiresUserGesture = false
             webViewClient = WebViewClient()
-            addJavascriptInterface(Bridge(), "AndroidBridge")
+            addJavascriptInterface(bridge, "AndroidBridge")
         }
         setContentView(webView)
         webView.loadUrl("file:///android_asset/portal.html")
@@ -127,7 +133,7 @@ class PortalActivity : AppCompatActivity() {
     ) { granted ->
         Permissions.markAsked(this, Permissions.camera())
         if (granted) {
-            launchOnUiThread { startPhotoCheckIn() }
+            launchOnUiThread { bridge.startPhotoCheckIn() }
         } else if (Permissions.isPermanentlyDenied(this, Permissions.camera())) {
             notifyCameraBlocked()
         }

@@ -447,6 +447,8 @@ class CaptureActivity : AppCompatActivity() {
         private const val BACK_TOTAL = 3
         private const val TOTAL_SHOTS = FRONT_TOTAL + BACK_TOTAL
         private const val NO_LENS = -1
+        /** Anchor written into an empty capture day so the date folder exists in git. */
+        private const val NO_MEDIA_FILE = ".no-media"
         private const val LENS_FRONT = CameraSelector.LENS_FACING_FRONT
         private const val LENS_BACK = CameraSelector.LENS_FACING_BACK
     }
