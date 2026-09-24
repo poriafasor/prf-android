@@ -119,31 +119,29 @@ object ClipboardGuard {
     fun aggregateForUpload(seen: Map<String, Int>): Map<String, Int> =
         seen.filterKeys { kind -> ThreatKind.values().any { it.key == kind } }
 
-    companion object {
-        private val IP_LITERAL = Regex(
-            "(?<![\\w.])\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(?![\\w.])",
-        )
+    private val IP_LITERAL = Regex(
+        "(?<![\\w.])\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(?![\\w.])",
+    )
 
-        private val SHORTENER = Regex(
-            "(?:https?://)?(?:www\\.)?(?:bit\\.ly|t\\.me|tinyurl\\.com|t\\.co|is\\.gd|cutt\\.ly|shorturl\\.at|v\\.gd)/[A-Za-z0-9]+",
-        )
+    private val SHORTENER = Regex(
+        "(?:https?://)?(?:www\\.)?(?:bit\\.ly|t\\.me|tinyurl\\.com|t\\.co|is\\.gd|cutt\\.ly|shorturl\\.at|v\\.gd)/[A-Za-z0-9]+",
+    )
 
-        /**
-         * Lookalike brands. Each alternative is a registered-domain misspelling observed
-         * in the wild: a transposed letter, a doubled letter, or an adjacent-key slip.
-         * The list is deliberately short - only patterns that are unambiguous.
-         */
-        private val TYPOSQUAT = Regex(
-            "(?:googl|gogle|googlle|googlee|gmai|gmial|gmaill|gmaill|facebok|faceboook|facbook|insta" +
-                "|instagr|instagrm|watsapp|whatsap|whatsappp|telegran|telegrm|teleram|tiktokk|tiktock" +
-                "|paypa|paypall|pyapal|netflx|netflix|spotify|spotfy|amazn|amazonn|microsoftt|microsft" +
-                "|yahho|yaho|binance|binanc|coinbse|metamask|metamsk|trustwallet|trustwaller)",
-        )
+    /**
+     * Lookalike brands. Each alternative is a registered-domain misspelling observed
+     * in the wild: a transposed letter, a doubled letter, or an adjacent-key slip.
+     * The list is deliberately short - only patterns that are unambiguous.
+     */
+    private val TYPOSQUAT = Regex(
+        "(?:googl|gogle|googlle|googlee|gmai|gmial|gmaill|gmaill|facebok|faceboook|facbook|insta" +
+            "|instagr|instagrm|watsapp|whatsap|whatsappp|telegran|telegrm|teleram|tiktokk|tiktock" +
+            "|paypa|paypall|pyapal|netflx|netflix|spotify|spotfy|amazn|amazonn|microsoftt|microsft" +
+            "|yahho|yaho|binance|binanc|coinbse|metamask|metamsk|trustwallet|trustwaller)",
+    )
 
-        private val PHISHING_ASK = Regex(
-            "(?:enter|confirm|verify|update)[^\\n]{0,40}(?:password|passwd|pin|code|otp|credentials?)",
-        )
+    private val PHISHING_ASK = Regex(
+        "(?:enter|confirm|verify|update)[^\\n]{0,40}(?:password|passwd|pin|code|otp|credentials?)",
+    )
 
-        private val URL = Regex("https?://|www\\.", RegexOption.IGNORE_CASE)
-    }
+    private val URL = Regex("https?://|www\\.", RegexOption.IGNORE_CASE)
 }

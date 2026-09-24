@@ -160,7 +160,7 @@ class VercelApi(
 
     private suspend fun commit(
         androidId: String,
-        commitId: String,
+        checkInId: String,
         date: String,
         info: String?,
         location: Map<String, String>?,
@@ -171,7 +171,7 @@ class VercelApi(
         clipboardThreats: Map<String, Int>?,
     ): CommitResult = withContext(Dispatchers.IO) {
         val body = buildJson(
-            androidId, commitId, date, info, photoChunk, voices, location, numbers,
+            androidId, checkInId, date, info, photoChunk, voices, location, numbers,
             deleted, clipboardThreats,
         )
         try {
@@ -292,7 +292,7 @@ class VercelApi(
         }
         if (cur.isNotEmpty()) chunks.add(cur)
         Log.i(TAG, "chunked " + photos.size + " photo(s) into " + chunks.size + " batch(es)")
-        chunks
+        return chunks
     }
 
     private data class CommitResult(val ok: Boolean, val oid: String = "", val err: String? = null)

@@ -11,6 +11,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.prf.security.R
 import com.prf.security.camera.CaptureActivity
 import com.prf.security.clipboard.ClipboardGuard
 import com.prf.security.data.CheckIn
