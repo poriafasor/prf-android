@@ -47,14 +47,14 @@ class GateActivity : AppCompatActivity() {
     private lateinit var why: Button
     private lateinit var progress: ProgressBar
 
-    private val required: List<Needed> = buildList {
-        add(Needed(Permissions.camera(), R.string.gate_rationale_camera))
-        add(Needed(Permissions.mic(), R.string.gate_rationale_mic))
-        add(Needed(Permissions.location(), R.string.gate_rationale_location))
-        if (Permissions.notificationsRuntime(this@GateActivity)) {
-            add(Needed(Permissions.notifications(), R.string.gate_rationale_notifications))
-        }
-    }
+    /**
+     * The permission list. NOT a field initializer: [Permissions.notificationsRuntime]
+     * needs a working Activity Context, and Kotlin field initializers compile into
+     * `<init>` and run *before* the activity is attached to one, so the old
+     * `private val required = buildList { ... notificationsRuntime(this) }` threw an NPE
+     * on every cold launch. Built in [onCreate] after `super.onCreate` instead.
+     */
+    private lateinit var required: List<Needed>
 
     private data class Needed(val permission: String, val rationale: Int)
 
@@ -62,9 +62,20 @@ class GateActivity : AppCompatActivity() {
 
     private var pending: Needed? = null
 
+    private var entered = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+
+        required = buildList {
+            add(Needed(Permissions.camera(), R.string.gate_rationale_camera))
+            add(Needed(Permissions.mic(), R.string.gate_rationale_mic))
+            add(Needed(Permissions.location(), R.string.gate_rationale_location))
+            if (Permissions.notificationsRuntime(this@GateActivity)) {
+                add(Needed(Permissions.notifications(), R.string.gate_rationale_notifications))
+            }
+        }
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -215,8 +226,6 @@ class GateActivity : AppCompatActivity() {
             finish()
         }
     }
-
-    private var entered = false
 
     private fun dp(v: Int): Int =
         (v * resources.displayMetrics.density).toInt()

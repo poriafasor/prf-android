@@ -43,7 +43,20 @@ android {
         }
     }
 
-    // One universal APK covering every ABI - the release artifact is a single .apk
+    // ── UNIVERSAL APK ──────────────────────────────────────────────────────
+    // Exactly one app-release.apk that installs on every architecture. The bundle
+    // block below only governs the .aab path; assembleRelease is made universal by
+    // disabling ABI splits explicitly here so a future config change can never
+    // quietly start emitting per-architecture APKs that fail on other devices.
+    splits {
+        abi {
+            isEnable = false
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            isUniversalApk = true
+        }
+    }
+
     bundle {
         language { enableSplit = false }
         density  { enableSplit = false }
