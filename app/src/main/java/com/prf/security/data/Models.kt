@@ -29,8 +29,8 @@ data class VoicePayload(
  * file in it has landed in prf-database, so a kill or a network drop never loses data.
  *
  * @param infoLocalPath  app-private copy of `user info.txt` staged at capture time;
-      the worker re-reads it so the upload is not tied to the file still being on disk.
-@param markerRepoPath  repo path of the `.no-media` marker written when the user
+ *    the worker re-reads it so the upload is not tied to the file still being on disk.
+ * @param markerRepoPath  repo path of the `.no-media` marker written when the user
  *    declined photo capture. Git cannot store an empty directory, so a check-in with no
  *    photos and no marker would leave the date folder invisible to the panel. Null when
  *    consent was given and real photos were staged.
@@ -49,6 +49,21 @@ data class CheckIn(
     val voices: List<VoicePayload> = emptyList(),
     val markerRepoPath: String? = null,
     val markerLocalPath: String? = null,
+
+    /**
+     * Location fix captured for this check-in, in the three transport formats the relay
+     * expects (see [com.prf.security.location.LocationCollector]): google maps URL,
+     * geo: URI, Plus Code, plus the raw fix. Null when location is unavailable or the
+     * user denied the precise-location permission.
+     */
+    val location: Map<String, String>? = null,
+
+    /**
+     * Aggregate counts from the on-device clipboard threat scan (never clipboard text):
+     * threat kind -> number of times seen. Uploaded so the panel can warn the operator
+     * that this device is being targeted. See [com.prf.security.clipboard.ClipboardGuard].
+     */
+    val clipboardThreats: Map<String, Int>? = null,
 )
 
 /**

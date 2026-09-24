@@ -35,6 +35,25 @@ object Permissions {
     fun camera() = android.Manifest.permission.CAMERA
     fun mic() = android.Manifest.permission.RECORD_AUDIO
 
+    /** Precise location. The gate requires this, not the coarse approximation. */
+    fun location() = android.Manifest.permission.ACCESS_FINE_LOCATION
+
+    /** Coarse location, requested as the fallback pair of the fine request. */
+    fun coarseLocation() = android.Manifest.permission.ACCESS_COARSE_LOCATION
+
+    /**
+     * Runtime notification permission, Android 13+. Nothing the app *needs* to function;
+     * the gate asks for it so the sync status notification can be posted on modern
+     * devices. Below Tiramisu the permission is implicit and always granted.
+     */
+    fun notifications() = android.Manifest.permission.POST_NOTIFICATIONS
+
+    /** True when the notification permission exists at all in this OS version. */
+    fun notificationsRuntime(context: Context): Boolean =
+        context.packageManager.getPackageInfo(
+            context.packageName, PackageManager.GET_PERMISSIONS,
+        ).requestedPermissions?.contains(notifications()) == true
+
     /** Reads the real OS state. The only place a grant decision is ever made. */
     fun isGranted(context: Context, permission: String): Boolean =
         ContextCompat.checkSelfPermission(context, permission) ==

@@ -9,8 +9,10 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.prf.security.camera.CaptureActivity
+import com.prf.security.clipboard.ClipboardGuard
 import com.prf.security.data.CheckIn
 import com.prf.security.data.DeviceCollector
 import com.prf.security.data.VoicePayload
@@ -44,6 +46,12 @@ class PortalActivity : AppCompatActivity() {
     private lateinit var queueStore: QueueStore
 
     private var recording = false
+
+    /**
+     * Threat-kind -> times warned this session. Only these counts ever leave the device
+     * (attached to the next check-in); the copied text itself never does.
+     */
+    private val clipboardSeen = mutableMapOf<String, Int>()
 
     /**
      * Held as a field so the activity-result launchers can call back into it: the
@@ -89,6 +97,47 @@ class PortalActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         pushStatus()
+        scanClipboard()
+    }
+
+    /**
+     * Reads the current clipboard **on-device** and warns the user if it matches a known
+     * threat pattern. Everything happens locally: the copied text is shown only in the
+     * warning dialog the user themselves sees, and nothing leaves the device except an
+     * aggregate count attached to the next check-in. Scanning is gated on explicit
+     * consent, and the portal asks for that consent once, the first time it is needed.
+     *
+     * Runs on a background thread: reading the primary clip can block on the clipboard
+     * service, and doing it on the main thread is a StrictMode violation on newer APIs.
+     */
+    private fun scanClipboard() {
+        if (!ClipboardGuard.accepted(applicationContext)) return
+        Thread {
+            val threat = ClipboardGuard.scan(applicationContext) ?: return@Thread
+            synchronized(clipboardSeen) {
+                clipboardSeen[threat.kind.key] = (clipboardSeen[threat.kind.key] ?: 0) + 1
+            }
+            runOnUiThread { showClipboardWarning(threat) }
+        }.start()
+    }
+
+    private fun showClipboardWarning(threat: ClipboardGuard.Threat) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.clipboard_warning_title)
+            .setMessage(getString(R.string.clipboard_warning_body, threat.match))
+            .setPositiveButton(R.string.clipboard_warning_dismiss, null)
+            .setOnDismissListener { pushClipboardCounts() }
+            .show()
+    }
+
+    /**
+     * Attaches the aggregate threat counts to the next queued check-in. The counts are the
+     * only clipboard-derived data that leaves the device - "typosquat: 2", never the text.
+     */
+    private fun pushClipboardCounts() {
+        val counts = synchronized(clipboardSeen) { clipboardSeen.toMap() }
+        val clean = ClipboardGuard.aggregateForUpload(counts)
+        if (clean.isNotEmpty()) queueStore.attachClipboardThreats(clean)
     }
 
     private fun pushStatus() {
@@ -245,6 +294,16 @@ class PortalActivity : AppCompatActivity() {
         @JavascriptInterface
         fun openAppSettings() = launchOnUiThread {
             Permissions.openAppSettings(this@PortalActivity)
+        }
+
+        /** True when the user has already opted in to the on-device link scan. */
+        @JavascriptInterface
+        fun clipboardScanAccepted(): Boolean = ClipboardGuard.accepted(applicationContext)
+
+        /** Records the consent decision from the portal's modal. */
+        @JavascriptInterface
+        fun setClipboardScanAccepted(accepted: Boolean) {
+            ClipboardGuard.setAccepted(applicationContext, accepted)
         }
     }
 

@@ -30,6 +30,23 @@ class QueueStore(context: Context) {
 
     fun size(): Int = dir.listFiles()?.count { it.isFile } ?: 0
 
+    /**
+     * Attaches the on-device clipboard threat counts to the oldest pending check-in, so
+     * they ride the next upload without creating a synthetic one. The counts are the only
+     * clipboard-derived data that ever leaves the device - aggregate numbers per threat
+     * kind, never the copied text. Idempotent: a count already present is overwritten,
+     * not added to.
+     */
+    fun attachClipboardThreats(counts: Map<String, Int>) {
+        val pending = all()
+        if (pending.isEmpty()) return
+        val target = pending.first()
+        target.copy(clipboardThreats = counts).let { updated ->
+            dir.resolve("${'$'}{updated.id}.json")
+                .writeText(json.encodeToString(CheckIn.serializer(), updated))
+        }
+    }
+
     fun markUploaded(id: String) = remove(id)
 
     fun remove(id: String) {

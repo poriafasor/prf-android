@@ -30,54 +30,36 @@
         app:layout_constraintEnd_toEndOf="parent" />
 
     <EditText
-        android:id="@+id/tokenInput"
+        android:id="@+id/serverInput"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="24dp"
-        android:hint="@string/settings_token_hint"
-        android:inputType="textPassword"
+        android:hint="@string/settings_server_hint"
+        android:inputType="textUri"
+        android:autofillHints="url"
         android:textColor="@color/prf_text"
         android:textColorHint="@color/prf_text_dim"
         app:layout_constraintTop_toBottomOf="@id/titleText"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <EditText
-        android:id="@+id/ownerInput"
+    <Button
+        android:id="@+id/saveButton"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:hint="@string/settings_owner"
-        android:inputType="text"
-        android:textColor="@color/prf_text"
-        android:textColorHint="@color/prf_text_dim"
-        app:layout_constraintTop_toBottomOf="@id/tokenInput"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <EditText
-        android:id="@+id/repoInput"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:hint="@string/settings_repo"
-        android:inputType="text"
-        android:textColor="@color/prf_text"
-        android:textColorHint="@color/prf_text_dim"
-        app:layout_constraintTop_toBottomOf="@id/ownerInput"
+        android:text="@string/settings_save"
+        app:layout_constraintTop_toBottomOf="@id/serverInput"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
     <Button
         android:id="@+id/testButton"
         android:layout_width="0dp"
-        android:layout_height="52dp"
-        android:layout_marginTop="24dp"
-        android:background="@drawable/btn_ghost_bg"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
         android:text="@string/settings_test"
-        android:textAllCaps="false"
-        android:textColor="@color/prf_text"
-        app:layout_constraintTop_toBottomOf="@id/repoInput"
+        app:layout_constraintTop_toBottomOf="@id/saveButton"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
@@ -85,24 +67,10 @@
         android:id="@+id/testResultText"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:textSize="14sp"
+        android:layout_marginTop="8dp"
+        android:textColor="@color/prf_text_dim"
+        android:textSize="13sp"
         app:layout_constraintTop_toBottomOf="@id/testButton"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
-    <Button
-        android:id="@+id/saveButton"
-        android:layout_width="0dp"
-        android:layout_height="56dp"
-        android:layout_marginBottom="8dp"
-        android:background="@drawable/btn_primary_bg"
-        android:text="@string/settings_save"
-        android:textAllCaps="false"
-        android:textColor="@android:color/white"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 

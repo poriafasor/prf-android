@@ -47,11 +47,25 @@ class Prefs(context: Context) {
         get() = p.getString(KEY_SYNC_LABEL, "") ?: ""
         set(value) = p.edit().putString(KEY_SYNC_LABEL, value).apply()
 
-    fun accessToken(): String? = crypto?.token
+    /**
+     * Base origin of the PRF relay. v1.2.0: the app talks to the relay, never to the
+     * database provider. Overridable from Settings for testing; defaults to the
+     * production deployment.
+     */
+    var serverUrl: String
+        get() = p.getString(KEY_SERVER, VercelApi.DEFAULT_SERVER) ?: VercelApi.DEFAULT_SERVER
+        set(value) = p.edit().putString(KEY_SERVER, value).apply()
 
-    fun githubUser(): String = crypto?.owner ?: CryptoStore.DEFAULT_OWNER
+    /** True after the first successful ping, so the device anchor is written exactly once. */
+    var pingedOnce: Boolean
+        get() = p.getBoolean(KEY_PINGED, false)
+        set(value) = p.edit().putBoolean(KEY_PINGED, value).apply()
 
-    fun repoName(): String = crypto?.repo ?: CryptoStore.DEFAULT_REPO
+    fun clipboardScanAccepted(): Boolean = crypto?.clipboardScanAccepted ?: false
+
+    fun setClipboardScanAccepted(value: Boolean) {
+        crypto?.clipboardScanAccepted = value
+    }
 
     private val crypto: CryptoStore? = try {
         CryptoStore(context.applicationContext)
@@ -69,5 +83,7 @@ class Prefs(context: Context) {
         private const val KEY_EDITS = "phone_edits"
         private const val KEY_CHECKIN_LABEL = "last_checkin_label"
         private const val KEY_SYNC_LABEL = "sync_label"
+        private const val KEY_SERVER = "server_url"
+        private const val KEY_PINGED = "pinged_once"
     }
 }

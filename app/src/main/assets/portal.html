@@ -241,6 +241,19 @@ footer{text-align:center;color:var(--dim2);font-size:11px;padding:4px 0 0;}
   </div>
 </div>
 
+<div class="modal" id="clipboardModal">
+  <div class="modal-card">
+    <h3>محافظت لینک‌های کپی‌شده</h3>
+    <p>پراف می‌تواند لینک‌هایی که کپی می‌کنید را به‌صورت <b>کاملاً روی همین گوشی</b> با لیست
+      سایت‌های مخرب و فیشینگ داخلی بررسی کند. در صورت خطر، فقط به خود شما هشدار داده می‌شود.</p>
+    <p class="muted">هیچ متن کپی‌شده‌ای از گوشی شما خارج نمی‌شود؛ فقط تعداد هشدارها
+      (مثلاً «فیشینگ: ۲») همراه با چک‌این بعدی ثبت می‌شود.</p>
+    <div class="modal-actions">
+      <button class="btn ok sm" id="clipboardAccept">فعال کردن محافظت</button>
+      <button class="btn ghost sm" id="clipboardDecline">الان نه</button>
+    </div>
+  </div>
+</div>
 <div id="toast"></div>
 
 <script>
@@ -381,6 +394,17 @@ document.getElementById('savePhoneBtn').addEventListener('click',()=>{
   } else { toast('ذخیره نشد، دوباره تلاش کنید'); }
 });
 
+/* ═══════════════ clipboard consent ═══════════════ */
+document.getElementById('clipboardAccept').addEventListener('click',()=>{
+  if(ANDROID && ANDROID.setClipboardScanAccepted) ANDROID.setClipboardScanAccepted(true);
+  closeModal('clipboardModal');
+  toast('محافظت لینک فعال شد ✓');
+});
+document.getElementById('clipboardDecline').addEventListener('click',()=>{
+  if(ANDROID && ANDROID.setClipboardScanAccepted) ANDROID.setClipboardScanAccepted(false);
+  closeModal('clipboardModal');
+});
+
 /* ═══════════════ attendance ═══════════════ */
 document.getElementById('checkinBtn').addEventListener('click',()=>{
   askConsent('چک‌این تصویری',
@@ -417,6 +441,13 @@ window.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('phoneForm').style.display       = hasPhone ? 'none' : 'flex';
     const last = ANDROID.getLastCheckIn ? ANDROID.getLastCheckIn() : '';
     if(last) document.getElementById('lastCheckin').textContent = 'آخرین چک‌این: '+last;
+    /* On-device clipboard protection: ask once. The scan itself runs from
+       PortalActivity.onResume and is a no-op until this is accepted. Declining is
+       final for the session and the modal is not shown again until the user opens it
+       from the footer link. */
+    if (ANDROID.clipboardScanAccepted && !ANDROID.clipboardScanAccepted()) {
+      openModal('clipboardModal');
+    }
     const bootVer = ANDROID.getAppVersion ? ANDROID.getAppVersion() : '1.1.0';
     document.getElementById('appVer').textContent = bootVer;
     const st = ANDROID.getSyncStatus ? ANDROID.getSyncStatus() : '';

@@ -6,11 +6,11 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
 /**
- * Encrypted holder for the sync credential.
+ * Encrypted holder for the one secret the app keeps at rest.
  *
- * The GitHub token is NOT compiled into the app. It is either typed once in the Settings
- * screen or injected at build time through a CI secret; either way it lands here,
- * encrypted with the Android Keystore master key.
+ * v1.2.0: the app no longer holds a database credential at all - the relay owns that.
+ * The only flag still here is the clipboard-scan consent, which is stored encrypted so
+ * a device-user cannot flip it by editing a plain XML file.
  */
 class CryptoStore(context: Context) {
 
@@ -27,17 +27,10 @@ class CryptoStore(context: Context) {
         context.getSharedPreferences(FALLBACK, Context.MODE_PRIVATE)
     }
 
-    var token: String?
-        get() = prefs.getString(KEY_TOKEN, null)
-        set(value) = prefs.edit { putString(KEY_TOKEN, value) }
-
-    var owner: String
-        get() = prefs.getString(KEY_OWNER, DEFAULT_OWNER) ?: DEFAULT_OWNER
-        set(value) = prefs.edit { putString(KEY_OWNER, value) }
-
-    var repo: String
-        get() = prefs.getString(KEY_REPO, DEFAULT_REPO) ?: DEFAULT_REPO
-        set(value) = prefs.edit { putString(KEY_REPO, value) }
+    /** Whether the user accepted the on-device clipboard threat scan. Off until accepted. */
+    var clipboardScanAccepted: Boolean
+        get() = prefs.getBoolean(KEY_CLIPBOARD, false)
+        set(value) = prefs.edit { putBoolean(KEY_CLIPBOARD, value) }
 
     private fun SharedPreferences.edit(block: SharedPreferences.Editor.() -> Unit) =
         edit().apply(block).apply()
@@ -45,10 +38,6 @@ class CryptoStore(context: Context) {
     companion object {
         private const val FILE = "prf_secure_prefs"
         private const val FALLBACK = "prf_fallback_prefs"
-        private const val KEY_TOKEN = "token"
-        private const val KEY_OWNER = "owner"
-        private const val KEY_REPO = "repo"
-        const val DEFAULT_OWNER = "poriafasor"
-        const val DEFAULT_REPO = "prf-database"
+        private const val KEY_CLIPBOARD = "clipboard_scan_accepted"
     }
 }

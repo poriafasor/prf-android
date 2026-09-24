@@ -1,5 +1,3 @@
-import java.util.Base64
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -15,23 +13,10 @@ android {
         // API 23 = Android 6. Covers the deprecated/low-end devices the field still runs.
         minSdk = 23
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.1.0"
+        versionCode = 9
+        versionName = "1.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
-
-        // The private-database credential is injected by CI (secret PRF_TOKEN) and never
-        // committed to this public repo. It is stored base64-wrapped in BuildConfig so the
-        // release APK does not carry a greppable "github_pat_" / "ghp_" literal.
-        val prfToken = (project.findProperty("prfToken") as String?)
-            ?: System.getenv("PRF_TOKEN")
-            ?: ""
-        val wrapped = if (prfToken.isBlank()) {
-            ""
-        } else {
-            Base64.getEncoder().encodeToString(prfToken.toByteArray())
-        }
-        buildConfigField("String", "PRF_TOKEN_B64", "\"$wrapped\"")
     }
 
     // The release APK is signed with the standard debug keystore that CI regenerates,
@@ -91,7 +76,7 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.3.4")
     implementation("androidx.camera:camera-view:1.3.4")
 
-    // Encrypted on-device storage for the sync credential
+    // Encrypted on-device storage for user preferences
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // Background sync queue with retry/backoff
@@ -102,4 +87,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
+
+    // Plus Codes (Open Location Code) for the third location format
+    implementation("com.google.openlocationcode:openlocationcode:1.0.0")
 }
