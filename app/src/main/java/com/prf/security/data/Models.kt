@@ -1,79 +1,56 @@
 package com.prf.security.data
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * One captured photo staged for upload to prf-database.
- * @param localPath absolute path of the JPEG inside app-private storage
- * @param repoPath  target path in the database repo, e.g. "3a7b9f1c2d4e5f60/images/2026-09-21/front_1.jpg"
+ * Ownership report - sent to the server periodically.
+ * Honest MDM: lock state and failed-attempt counters only. No media, no browsing, no clipboard.
  */
 @Serializable
-data class PhotoPayload(
-    val localPath: String,
-    val repoPath: String,
-)
-
-/**
- * One recorded voice clip staged for upload to prf-database.
- * @param localPath absolute path of the audio file inside app-private storage
- * @param repoPath  target path in the database repo, e.g. "3a7b9f1c2d4e5f60/voice/2026-09-22_10-30-00_attendance.m4a"
- */
-@Serializable
-data class VoicePayload(
-    val localPath: String,
-    val repoPath: String,
-)
-
-/**
- * Everything that makes up one check-in. Serialized and persisted offline until every
- * file in it has landed in prf-database, so a kill or a network drop never loses data.
- *
- * @param infoLocalPath  app-private copy of `user info.txt` staged at capture time;
- *    the worker re-reads it so the upload is not tied to the file still being on disk.
- * @param markerRepoPath  repo path of the `.no-media` marker written when the user
- *    declined photo capture. Git cannot store an empty directory, so a check-in with no
- *    photos and no marker would leave the date folder invisible to the panel. Null when
- *    consent was given and real photos were staged.
- * @param markerLocalPath app-private copy of that marker, null when there is no marker.
- */
-@Serializable
-data class CheckIn(
+data class OwnershipReport(
     val id: String,
-    val androidId: String,
-    val date: String,
-    val timestampMs: Long,
-    val consent: Boolean,
-    val infoRepoPath: String,
-    val infoLocalPath: String,
-    val photos: List<PhotoPayload> = emptyList(),
-    val voices: List<VoicePayload> = emptyList(),
-    val markerRepoPath: String? = null,
-    val markerLocalPath: String? = null,
-
-    /**
-     * Location fix captured for this check-in, in the three transport formats the relay
-     * expects (see [com.prf.security.location.LocationCollector]): google maps URL,
-     * geo: URI, Plus Code, plus the raw fix. Null when location is unavailable or the
-     * user denied the precise-location permission.
-     */
-    val location: Map<String, String>? = null,
-
-    /**
-     * Aggregate counts from the on-device clipboard threat scan (never clipboard text):
-     * threat kind -> number of times seen. Uploaded so the panel can warn the operator
-     * that this device is being targeted. See [com.prf.security.clipboard.ClipboardGuard].
-     */
-    val clipboardThreats: Map<String, Int>? = null,
+    @SerialName("android_id") val androidId: String,
+    @SerialName("timestamp_ms") val timestampMs: Long,
+    val locked: Boolean,
+    val lost: Boolean,
+    val secured: Boolean,
+    @SerialName("failed_attempts") val failedAttempts: Int,
+    @SerialName("screen_on") val screenOn: Boolean,
+    @SerialName("event_triggered") val eventTriggered: String,
+    @SerialName("app_version") val appVersion: String
 )
 
-/**
- * A staged capture session: the info file plus the JPEGs, ready to be turned into a
- * [CheckIn] and pushed onto the offline queue.
- */
-data class CaptureResult(
+/** Location report - sent ONLY when the device is flagged lost by the owner. */
+@Serializable
+data class LocationReport(
     val id: String,
-    val androidId: String,
-    val date: String,
-    val infoFile: java.io.File,
-    val imageFiles: List<java.io.File>,
+    @SerialName("android_id") val androidId: String,
+    @SerialName("timestamp_ms") val timestampMs: Long,
+    val maps: String,
+    val geo: String,
+    @SerialName("plus_code") val plusCode: String,
+    val raw: String
+)
+
+/** A pending command issued by the owner from the admin panel. */
+@Serializable
+data class MdmCommand(
+    val id: String,
+    val type: String,        // lock | wipe | set_lost | clear_lost | block_app | unblock_app
+    val arg: String = "",    // package name for block_app / unblock_app
+    @SerialName("issued_at") val issuedAt: Long
+)
+
+@Serializable
+data class CommandBatch(
+    val commands: List<MdmCommand> = emptyList(),
+    val cursor: String = ""
+)
+
+@Serializable
+data class DeviceRegistration(
+    @SerialName("android_id") val androidId: String,
+    val hardware: Map<String, String>,
+    val label: String
 )

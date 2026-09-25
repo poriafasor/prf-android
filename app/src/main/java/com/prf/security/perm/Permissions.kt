@@ -10,78 +10,51 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
 /**
- * One permission at a time.
+ * v1.3.0 permission handling.
  *
- * The v1.0 client asked for CAMERA and RECORD_AUDIO together in a single
- * [androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions]
- * call. On Android 11+ the system surfaces only the first dialog of a batch and returns a
- * result map that is missing every permission the user was never shown. That absent entry
- * is not a `false`, so the old callback treated a not-asked mic as a denial: the user
- * granted the camera, the photo was taken, and the mic never recorded.
+ * The only runtime permission the MDM app asks for is ACCESS_FINE_LOCATION, and it has one
+ * purpose: the lost-mode location report the owner enables from the admin panel. It is
+ * requested with a visible rationale, never pre-granted, never asked from a background
+ * context. Camera, microphone and clipboard are not in the manifest at all.
  *
- * Every request here is therefore a single-permission [androidx.activity.result.contract
- * .ActivityResultContracts.RequestPermission] launch, and the grant decision is always read
- * back from the OS with [isGranted] - never from the result map - so a callback can never
- * mistake "never asked" for "denied".
- *
- * A permission that was asked before and is no longer showable is a permanent denial: the
- * only recovery is the app's own settings screen, so [openAppSettings] is offered instead of
- * another silent refusal.
+ * One permission per request: a batched request on Android 11+ surfaces only the first
+ * dialog and returns a result map missing the rest, which the v1.0 client misread as a
+ * denial. The grant decision is always read back from the OS with [isGranted], never from
+ * the result map, so "never asked" can never be mistaken for "denied".
  */
 object Permissions {
 
     private const val PREFS = "prf_perm_state"
 
-    fun camera() = android.Manifest.permission.CAMERA
-    fun mic() = android.Manifest.permission.RECORD_AUDIO
-
-    /** Precise location. The gate requires this, not the coarse approximation. */
+    /** Precise location. Used only for the lost-mode report. */
     fun location() = android.Manifest.permission.ACCESS_FINE_LOCATION
 
-    /** Coarse location, requested as the fallback pair of the fine request. */
-    fun coarseLocation() = android.Manifest.permission.ACCESS_COARSE_LOCATION
-
-    /**
-     * Runtime notification permission, Android 13+. Nothing the app *needs* to function;
-     * the gate asks for it so the sync status notification can be posted on modern
-     * devices. Below Tiramisu the permission is implicit and always granted.
-     */
-    fun notifications() = android.Manifest.permission.POST_NOTIFICATIONS
-
-    /** True when the notification permission exists at all in this OS version. */
-    fun notificationsRuntime(context: Context): Boolean =
+    /** True when the location permission exists at all in this OS version. */
+    fun locationRuntime(context: Context): Boolean =
         context.packageManager.getPackageInfo(
             context.packageName, PackageManager.GET_PERMISSIONS,
-        ).requestedPermissions?.contains(notifications()) == true
+        ).requestedPermissions?.contains(location()) == true
 
     /** Reads the real OS state. The only place a grant decision is ever made. */
     fun isGranted(context: Context, permission: String): Boolean =
         ContextCompat.checkSelfPermission(context, permission) ==
             PackageManager.PERMISSION_GRANTED
 
-    /**
-     * Asked before, and the system will no longer show the rationale dialog. That
-     * combination is the definition of a permanent denial.
-     */
+    /** Asked before, and the system will no longer show the rationale dialog. */
     fun isPermanentlyDenied(activity: Activity, permission: String): Boolean =
         askedBefore(activity, permission) &&
             !ActivityCompat.shouldShowRequestPermissionRationale(activity, permission)
 
-    /**
-     * True only while the system may still show a dialog. A permanently denied permission
-     * must route to the app settings screen, not back into the launcher.
-     */
+    /** True only while the system may still show a dialog. */
     fun canAskAgain(activity: Activity, permission: String): Boolean =
         !isGranted(activity, permission) && !isPermanentlyDenied(activity, permission)
 
-    /** Records that the system dialog for [permission] has been shown at least once. */
     @Synchronized
     fun markAsked(context: Context, permission: String) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         prefs.edit().putBoolean(key(permission), true).apply()
     }
 
-    /** Whether [markAsked] has ever been called for [permission] on this device. */
     fun askedBefore(context: Context, permission: String): Boolean =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getBoolean(key(permission), false)

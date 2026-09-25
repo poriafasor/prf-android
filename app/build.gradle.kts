@@ -13,8 +13,8 @@ android {
         // API 23 = Android 6. Covers the deprecated/low-end devices the field still runs.
         minSdk = 23
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.2.0"
+        versionCode = 10
+        versionName = "1.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -83,13 +83,8 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.9.2")
     implementation("androidx.fragment:fragment-ktx:1.8.3")
 
-    // CameraX - the actual capture engine (3 front + 3 back)
-    implementation("androidx.camera:camera-core:1.3.4")
-    implementation("androidx.camera:camera-camera2:1.3.4")
-    implementation("androidx.camera:camera-lifecycle:1.3.4")
-    implementation("androidx.camera:camera-view:1.3.4")
 
-    // Encrypted on-device storage for user preferences
+    // Encrypted at-rest storage for the device key
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // Background sync queue with retry/backoff

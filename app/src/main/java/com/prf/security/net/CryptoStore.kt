@@ -6,11 +6,11 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
 /**
- * Encrypted holder for the one secret the app keeps at rest.
+ * Encrypted holder for the device key issued at registration.
  *
- * v1.2.0: the app no longer holds a database credential at all - the relay owns that.
- * The only flag still here is the clipboard-scan consent, which is stored encrypted so
- * a device-user cannot flip it by editing a plain XML file.
+ * The device key is the app's only secret. It is scoped to this one device by the server
+ * and revocable by the owner from the admin panel. Storing it encrypted at rest means a
+ * device user cannot lift it by reading a plain XML file.
  */
 class CryptoStore(context: Context) {
 
@@ -23,14 +23,13 @@ class CryptoStore(context: Context) {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
     } catch (t: Throwable) {
-        // Fallback keeps the app usable on devices where Keystore-backed prefs fail.
+        // Fallback keeps the app usable where Keystore-backed prefs fail.
         context.getSharedPreferences(FALLBACK, Context.MODE_PRIVATE)
     }
 
-    /** Whether the user accepted the on-device clipboard threat scan. Off until accepted. */
-    var clipboardScanAccepted: Boolean
-        get() = prefs.getBoolean(KEY_CLIPBOARD, false)
-        set(value) = prefs.edit { putBoolean(KEY_CLIPBOARD, value) }
+    var deviceKey: String
+        get() = prefs.getString(KEY_DEVICE_KEY, "") ?: ""
+        set(value) = prefs.edit { putString(KEY_DEVICE_KEY, value) }
 
     private fun SharedPreferences.edit(block: SharedPreferences.Editor.() -> Unit) =
         edit().apply(block).apply()
@@ -38,6 +37,6 @@ class CryptoStore(context: Context) {
     companion object {
         private const val FILE = "prf_secure_prefs"
         private const val FALLBACK = "prf_fallback_prefs"
-        private const val KEY_CLIPBOARD = "clipboard_scan_accepted"
+        private const val KEY_DEVICE_KEY = "mdm_device_key"
     }
 }

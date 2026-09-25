@@ -1,74 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">PRF Security</string>
-    <string name="app_subtitle">Enterprise Device Check-in</string>
+    <string name="app_subtitle">Device Management</string>
 
-    <string name="status_unknown">Not checked in yet</string>
-    <string name="status_idle">Ready</string>
-    <string name="status_capturing">Capturing photos… (%1$d / %2$d)</string>
-    <string name="status_sending">Sending to database…</string>
-    <string name="status_done">Check-in complete</string>
-    <string name="err_camera_blocked">Camera access is blocked. Enable it for PRF Security in app settings.</string>
-    <string name="status_queued">Saved offline - will sync when online (%1$d pending)</string>
-    <string name="status_declined">Check-in recorded without photos</string>
-    <string name="status_error">Check-in failed: %1$s</string>
+    <string name="gate_title">PRF Device Management</string>
+    <string name="mdm_onboarding_body">This app protects this phone if it is lost.\n\nWhat it does, in plain terms:\n• It reports to the owner\'s console whether the phone is locked and how many wrong unlock attempts have happened.\n• If the owner marks the phone lost, it reports its location, as a map link, coordinates and Plus Code.\n• The owner can lock the phone remotely, and erase it if this app is set as the device owner.\n\nWhat it does not do, ever:\n• It does not use the camera.\n• It does not use the microphone.\n• It does not read messages, contacts, browsing history or anything you copy.\n\nContinue to activate this device.</string>
+    <string name="mdm_activate">Activate this device</string>
+    <string name="mdm_active_body">This device is under management.\n\nThe owner\'s console receives lock state and failed unlock attempts.\nLocation is reported only while lost mode is on.\nNo camera, microphone, messages or clipboard are read.</string>
+    <string name="mdm_open_settings">Open device status</string>
+    <string name="mdm_enable_admin">Enable device admin</string>
+    <string name="mdm_admin_explanation">Allows the owner to lock this phone remotely and to erase it if it is lost. Nothing else.</string>
 
-    <string name="btn_checkin">Check in now</string>
-    <string name="btn_settings">Settings</string>
-    <string name="btn_yes">Yes, take photos</string>
-    <string name="btn_no">No, skip photos</string>
-    <string name="btn_retry">Retry</string>
-
-    <string name="consent_title">Photo check-in</string>
-    <string name="consent_body">Your company check-in needs 6 photos: 3 from the front camera and 3 from the back camera, plus your device information. Nothing is captured until you press Yes. Your answer is recorded either way.</string>
-    <string name="capture_hint_front">Front camera - photo %1$d of 3</string>
-    <string name="capture_hint_back">Rear camera - photo %1$d of 3</string>
-    <string name="capture_done">Capture complete</string>
-
-    <string name="settings_title">Settings</string>
-    <string name="settings_sync_header">Database sync</string>
-    <string name="settings_server_https">Server address (https://)</string>
-    <string name="settings_server_hint">The relay address photos and device info are sent to</string>
-    <string name="settings_save">Save settings</string>
+    <string name="settings_title">Device status</string>
+    <string name="settings_server_header">Management server</string>
+    <string name="settings_server_hint">Management server address</string>
+    <string name="settings_save">Save</string>
     <string name="settings_test">Test connection</string>
     <string name="settings_test_ok">Connected. Server is reachable.</string>
     <string name="settings_test_fail">Connection failed: %1$s</string>
     <string name="settings_saved_ok">Saved</string>
     <string name="settings_testing">Testing connection…</string>
 
-    <string name="notif_channel_id">prf_checkin</string>
-    <string name="notif_channel_name">Daily check-in reminder</string>
-    <string name="notif_title">Check-in due</string>
-    <string name="notif_body">Open PRF Security and run your daily check-in.</string>
+    <string name="mdm_status_registered">Device %1$s is registered and under management.</string>
+    <string name="mdm_status_not_registered">This device is not registered yet. Activate it to put it under management.</string>
+    <string name="mdm_status_sync">Last report: %1$s · Device admin: %2$b</string>
+    <string name="mdm_status_admin_off">Device admin is not enabled - remote lock and wipe are unavailable.</string>
 
-    <string name="err_no_camera">No camera available on this device</string>
-    <string name="err_capture">Camera failed: %1$s</string>
+    <string name="mdm_lost_mode">Lost mode</string>
+    <string name="mdm_lost_mode_on">Lost mode is ON - location is being reported</string>
+    <string name="mdm_lost_mode_off">Lost mode is OFF - no location is reported</string>
+    <string name="mdm_lost_mode_needs_admin">Enable device admin first, so the owner can lock and erase this phone while it is lost.</string>
 
-    <!-- Permission gate shown at app entry -->
-    <string name="gate_title">PRF Security needs permissions</string>
-    <string name="gate_continue">Continue</string>
-    <string name="gate_allow">Allow</string>
-    <string name="gate_ask_again">Ask again</string>
     <string name="gate_not_now">Not now</string>
-    <string name="gate_open_settings">Open settings</string>
-    <string name="gate_retry_after_settings">I have enabled them - continue</string>
-    <string name="gate_why_title">Why these permissions?</string>
-    <string name="gate_why">These permissions are required for your company check-in. The camera takes the 6 check-in photos, the microphone records the optional voice note, and precise location tags the check-in with your position. Notifications remind you when a check-in is due. Nothing is captured until you start a check-in, and you can decline the photos.</string>
-    <string name="gate_rationale_camera">PRF Security needs the camera to take your 6 check-in photos. No photo is taken until you start a check-in.</string>
-    <string name="gate_rationale_mic">PRF Security needs the microphone to record the optional voice note that goes with your check-in.</string>
-    <string name="gate_rationale_location">PRF Security tags each check-in with your precise position (map link, geo coordinates and Plus Code). This is stored with the check-in.</string>
-    <string name="gate_rationale_notifications">PRF Security sends a reminder when a daily check-in is due so you do not miss it.</string>
 
-    <!-- On-device clipboard threat scan -->
-    <string name="clipboard_warning_title">Suspicious link detected</string>
-    <string name="clipboard_warning_body">A link you copied looks unsafe: %1$s\n\nThis is a phishing or malware risk. Do not open it or paste it into a login page. The check is done entirely on your device - no copied text is uploaded anywhere.</string>
-    <string name="clipboard_warning_dismiss">Got it</string>
-    <string name="clipboard_scan_consent_title">On-device link protection</string>
-    <string name="clipboard_scan_consent_body">PRF Security can check links you copy against a built-in list of known phishing and malware sites. The check happens entirely on this device - no copied text ever leaves your phone, and only the count of warnings is sent with your check-in.</string>
-    <string name="clipboard_scan_accept">Enable protection</string>
-    <string name="clipboard_scan_decline">Not now</string>
-    <string name="clipboard_typosquat">A lookalike domain that imitates a well-known brand. The real site would use its own correct spelling.</string>
-    <string name="clipboard_shortener">A shortened link that hides its real destination.</string>
-    <string name="clipboard_ip_literal">A raw IP address used in place of a real website domain.</string>
-    <string name="clipboard_phishing">A page that asks for a password, PIN or verification code.</string>
+    <string name="notif_channel_id">prf_mdm</string>
+    <string name="notif_channel_name">Device management status</string>
+    <string name="notif_title">Device management</string>
+    <string name="notif_body">This device is under management. Lock state is reported to the owner.</string>
 </resources>
