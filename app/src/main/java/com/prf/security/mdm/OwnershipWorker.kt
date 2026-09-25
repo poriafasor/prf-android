@@ -87,7 +87,7 @@ class OwnershipWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
                 .setConstraints(netConstraints())
                 .build()
             WorkManager.getInstance(context)
-                .enqueueUniqueWork(UNIQUE, ExistingWorkPolicy.KEEP, req)
+                .enqueueUniquePeriodicWork(UNIQUE, ExistingWorkPolicy.KEEP, req)
         }
     }
 }

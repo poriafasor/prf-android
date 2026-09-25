@@ -29,7 +29,7 @@ import kotlinx.coroutines.withContext
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySettingsBinding
-    private val prefs by lazy { Prefs(this) }
+    private val prefs by lazy { Prefs.get(this) }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun onCreate(savedInstanceState: Bundle?) {

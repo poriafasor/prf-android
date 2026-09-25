@@ -83,7 +83,7 @@ object DeviceCollector {
     }
 
     private fun availableBytes(): Long {
-        val stat = StatFs(android.os.Environment.getDataDirectory())
+        val stat = StatFs(android.os.Environment.getDataDirectory().absolutePath)
         return stat.availableBlocksLong * stat.blockSizeLong
     }
 }

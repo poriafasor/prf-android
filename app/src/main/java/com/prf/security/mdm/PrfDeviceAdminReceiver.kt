@@ -6,7 +6,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.prf.security.data.Prefs
+import com.prf.security.net.Prefs
 
 /**
  * Device Admin hook. Lets the owner lock the device and (when Device Owner) wipe it remotely.

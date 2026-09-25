@@ -134,7 +134,7 @@ class GateActivity : AppCompatActivity() {
             if (res.ok && res.deviceKey.isNotEmpty()) {
                 prefs.deviceKey = res.deviceKey
                 prefs.registered = true
-                prefs.androidId(this@GateActivity)
+                Prefs.androidId(this@GateActivity)
                 CryptoStore(this@GateActivity).deviceKey = res.deviceKey
                 OwnershipWorker.schedulePeriodic(this@GateActivity)
                 OwnershipWorker.runNow(this@GateActivity)

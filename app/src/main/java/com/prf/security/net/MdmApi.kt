@@ -7,10 +7,15 @@ import com.prf.security.data.OwnershipReport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
-import kotlinx.serialization.json.putJsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -45,12 +50,11 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
         hardware: Map<String, String>,
         label: String
     ): RegisterResult = withContext(Dispatchers.IO) {
-        val body = json.encodeToString(
-            DeviceRegistration(androidId, hardware, label)
-        )
+        val body = json.encodeToString(DeviceRegistration.serializer(), DeviceRegistration(androidId, hardware, label))
         val res = post("/api/device/register", body, deviceKey = null)
         if (res.ok) {
-            val key = res.json!!.jsonObject["deviceKey"]?.jsonPrimitive?.contentOrNull ?: ""
+            val element = res.json?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() }
+            val key = (element as? JsonObject)?.get("deviceKey")?.let { (it as? JsonPrimitive)?.contentOrNull } ?: ""
             if (key.isNotEmpty()) RegisterResult(true, key, "") else RegisterResult(false, "", "no key in response")
         } else RegisterResult(false, "", res.error)
     }
@@ -61,7 +65,7 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
     ): ReportResult = withContext(Dispatchers.IO) {
         val body = buildJsonObject {
             putJsonArray("reports") {
-                reports.forEach { putJsonObject(json.encodeToJsonElement(it).jsonObject) }
+                reports.forEach { add(json.encodeToJsonElement(it)) }
             }
             location?.let { put("location", json.encodeToJsonElement(it)) }
         }.toString()
@@ -72,13 +76,13 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
     suspend fun commands(cursor: String): CommandBatch? = withContext(Dispatchers.IO) {
         val body = buildJsonObject { put("cursor", cursor) }.toString()
         val res = post("/api/device/commands", body, deviceKey = deviceKey)
-        if (res.ok) json.decodeFromString(CommandBatch.serializer(), res.json!!)
+        if (res.ok) res.json?.let { runCatching { json.decodeFromString(CommandBatch.serializer(), it) }.getOrNull() }
         else null
     }
 
     suspend fun ack(commandIds: List<String>): Boolean = withContext(Dispatchers.IO) {
         val body = buildJsonObject {
-            putJsonArray("ids") { commandIds.forEach { put(it) } }
+            putJsonArray("ids") { commandIds.forEach { add(JsonPrimitive(it)) } }
         }.toString()
         post("/api/device/ack", body, deviceKey = deviceKey).ok
     }

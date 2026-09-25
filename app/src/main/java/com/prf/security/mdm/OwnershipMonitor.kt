@@ -3,7 +3,7 @@ package com.prf.security.mdm
 import android.content.Context
 import android.os.Build
 import com.prf.security.data.OwnershipReport
-import com.prf.security.data.Prefs
+import com.prf.security.net.Prefs
 import java.util.UUID
 
 /**
