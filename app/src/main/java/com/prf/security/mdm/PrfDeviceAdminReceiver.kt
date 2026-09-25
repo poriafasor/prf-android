@@ -17,7 +17,7 @@ class PrfDeviceAdminReceiver : DeviceAdminReceiver() {
     override fun onEnabled(context: Context, intent: Intent) {
         super.onEnabled(context, intent)
         Log.i(TAG, "device admin enabled")
-        Prefs.get(context).setAdminEnabled(true)
+        Prefs.get(context).adminEnabled = true
         OwnershipMonitor.markSecured(context)
     }
 
@@ -28,7 +28,7 @@ class PrfDeviceAdminReceiver : DeviceAdminReceiver() {
     override fun onDisabled(context: Context, intent: Intent) {
         super.onDisabled(context, intent)
         Log.i(TAG, "device admin disabled")
-        Prefs.get(context).setAdminEnabled(false)
+        Prefs.get(context).adminEnabled = false
     }
 
     override fun onPasswordFailed(context: Context, intent: Intent) {
