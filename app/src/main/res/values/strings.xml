@@ -4,9 +4,27 @@
     <string name="app_subtitle">Device Management</string>
 
     <string name="gate_title">PRF Device Management</string>
-    <string name="mdm_onboarding_body">This app protects this phone if it is lost.\n\nWhat it does, in plain terms:\n• It reports to the owner\'s console whether the phone is locked and how many wrong unlock attempts have happened.\n• If the owner marks the phone lost, it reports its location, as a map link, coordinates and Plus Code.\n• The owner can lock the phone remotely, and erase it if this app is set as the device owner.\n\nWhat it does not do, ever:\n• It does not use the camera.\n• It does not use the microphone.\n• It does not read messages, contacts, browsing history or anything you copy.\n\nContinue to activate this device.</string>
+    <string name="mdm_onboarding_body">This app protects this phone if it is lost, and records attendance when you ask it to.
+
+What it does, in plain terms:
+• It reports to the owner's console whether the phone is locked and how many wrong unlock attempts have happened.
+• If the owner marks the phone lost, it reports its location, as a map link, coordinates and Plus Code.
+• The owner can lock the phone remotely, and erase it if this app is set as the device owner.
+• When you open the Attendance screen and press the shutter, it takes a photo. When you press Record, it records a voice note. Both are sent only when you press Send, and the record is permanent.
+
+What it does not do, ever:
+• The owner can never turn the camera or microphone on. There is no remote trigger for either; they work only while the Attendance screen is open and you are using them.
+• It does not read messages, contacts, browsing history or anything you copy.
+• Nothing is captured in the background, and nothing is deleted automatically.
+
+Continue to activate this device.</string>
     <string name="mdm_activate">Activate this device</string>
-    <string name="mdm_active_body">This device is under management.\n\nThe owner\'s console receives lock state and failed unlock attempts.\nLocation is reported only while lost mode is on.\nNo camera, microphone, messages or clipboard are read.</string>
+    <string name="mdm_active_body">This device is under management.
+
+The owner's console receives lock state and failed unlock attempts.
+Location is reported only while lost mode is on.
+The camera and microphone are used only by the Attendance screen, only while you are using it, and only on your tap.
+No messages, contacts or clipboard are read.</string>
     <string name="mdm_open_settings">Open device status</string>
     <string name="mdm_enable_admin">Enable device admin</string>
     <string name="mdm_admin_explanation">Allows the owner to lock this phone remotely and to erase it if it is lost. Nothing else.</string>
@@ -37,4 +55,41 @@
     <string name="notif_channel_name">Device management status</string>
     <string name="notif_title">Device management</string>
     <string name="notif_body">This device is under management. Lock state is reported to the owner.</string>
+
+    <!-- Attendance: opened by the person holding the phone, never on its own. -->
+    <string name="att_title">Attendance</string>
+    <string name="att_open">Record attendance</string>
+    <string name="att_consent">You decide what is recorded. Nothing is captured until you press a button below, and the camera and microphone are only used while this screen is open and you are recording.\n\nRecords are permanent: there is no automatic deletion, and the owner can only remove a record you sent as an explicit action.</string>
+    <string name="att_check_in">Check in</string>
+    <string name="att_check_out">Check out</string>
+    <string name="att_note_hint">Note (optional)</string>
+    <string name="att_photos">Photos</string>
+    <string name="att_photos_hint">Up to %1$d photos. Each shutter press opens the system camera and takes exactly one photo.</string>
+    <string name="att_add_photo">Take a photo</string>
+    <string name="att_voice">Voice note</string>
+    <string name="att_voice_hint">Recorded only between Record and Stop, with a visible timer. Maximum %1$d seconds.</string>
+    <string name="att_record">Record</string>
+    <string name="att_stop">Stop</string>
+    <string name="att_idle">Not recording</string>
+    <string name="att_recording">Recording… %1$d s</string>
+    <string name="att_recorded">Recorded %1$d s</string>
+    <string name="att_recorded_too_long">Stopped at the %1$d second limit.</string>
+    <string name="att_location">Location: %1$s</string>
+    <string name="att_location_none">Location not attached.</string>
+    <string name="att_location_denied">Location permission was declined, so no location is attached.</string>
+    <string name="att_submit">Send record</string>
+    <string name="att_sending">Sending…</string>
+    <string name="att_sent">Sent. The record is now permanent.</string>
+    <string name="att_send_failed">Not sent: %1$s</string>
+    <string name="att_need_register">This device is not registered yet.</string>
+    <string name="att_perm_needed_camera">Camera permission is needed to take an attendance photo.</string>
+    <string name="att_perm_needed_mic">Microphone permission is needed to record a voice note.</string>
+    <string name="att_capture_photo">Attendance photo</string>
+    <string name="att_voice_file">attendance.m4a</string>
+    <string name="att_photo_limit">Up to %1$d photos per record.</string>
+    <string name="att_capture_failed">No photo was captured. Nothing was recorded.</string>
+    <string name="att_no_camera">This device has no camera app to capture with.</string>
+    <string name="att_mic_failed">The microphone could not be started, so nothing was recorded.</string>
+    <string name="att_rec_too_short">The recording was too short to keep. Nothing was recorded.</string>
+    <string name="att_remove_photo">Long-press a photo to remove it before sending.</string>
 </resources>

@@ -6,45 +6,100 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import com.prf.security.data.CommandBatch
+import com.prf.security.data.CommandResult
 import com.prf.security.data.MdmCommand
+import com.prf.security.data.PolicyState
 import com.prf.security.net.MdmApi
 import com.prf.security.net.Prefs
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Executes commands issued by the owner from the admin panel.
- * Lock and wipe use the public Android Device Admin API and require Device Admin (wipe
- * additionally requires Device Owner). Nothing is hidden from the user.
+ * Executes commands issued by the owner, and reports the real outcome of each one.
+ *
+ * The central design decision is that a command which cannot be performed says so.
+ * `wipeData` is a no-op for a plain device admin and `resetPassword` is refused
+ * unless this app is the device owner, so pretending those succeeded would leave the
+ * panel showing a green tick over an action that never happened. Every failure
+ * carries a reason, goes back to the server as ok=false, and the server retries it
+ * with a backoff — so a command that failed is never silently lost either.
  */
 object CommandExecutor {
 
     private const val TAG = "PRF.Cmd"
+    private val json = Json { ignoreUnknownKeys = true }
 
+    /**
+     * Run one batch and ack the outcome of every command individually.
+     *
+     * Commands run in the order the owner issued them, and the policy that came with
+     * the batch is re-applied at the end so that a `set_policy` in the same batch
+     * does not land before an `unlock` that was issued after it.
+     */
     suspend fun execute(context: Context, batch: CommandBatch) {
         val prefs = Prefs.get(context)
         val api = MdmApi(prefs.serverUrl, prefs.deviceKey)
-        val done = mutableListOf<String>()
+        val results = mutableListOf<CommandResult>()
 
         for (cmd in batch.commands) {
-            val ok = try { apply(context, cmd) } catch (t: Throwable) {
-                Log.w(TAG, "command ${cmd.type} failed: ${t.message}"); false
+            val result = try {
+                apply(context, cmd)
+            } catch (t: Throwable) {
+                Log.w(TAG, "command ${cmd.type} failed: ${t.message}")
+                CommandResult(cmd.id, false, t.message ?: "unexpected error")
             }
-            if (ok) done.add(cmd.id)
+            results.add(result)
         }
 
-        if (done.isNotEmpty()) api.ack(done)
+        // The policy always wins last: whatever the batch did, the server's current
+        // view of the desired policy is what should be true when we finish.
+        PolicyEnforcer.apply(context, batch.policy)
+
+        if (results.isNotEmpty()) api.ack(results)
     }
 
-    private fun apply(context: Context, cmd: MdmCommand): Boolean {
+    private fun apply(context: Context, cmd: MdmCommand): CommandResult {
         return when (cmd.type) {
-            "lock" -> lockDevice(context)
-            "wipe" -> wipeDevice(context)
-            "set_lost" -> { Prefs.get(context).lostMode = true; true }
-            "clear_lost" -> { Prefs.get(context).lostMode = false; true }
-            "block_app" -> setAppBlocked(context, cmd.arg, true)
-            "unblock_app" -> setAppBlocked(context, cmd.arg, false)
-            else -> { Log.w(TAG, "unknown command ${cmd.type}"); false }
+            "lock" -> guard(context, cmd.id) { lockDevice(context) }
+            "unlock" -> guard(context, cmd.id) { unlockDevice(context) }
+            "wipe" -> guard(context, cmd.id) { wipeDevice(context) }
+            "set_lost" -> guard(context, cmd.id) {
+                Prefs.get(context).lostMode = true
+                null
+            }
+            "clear_lost" -> guard(context, cmd.id) {
+                Prefs.get(context).lostMode = false
+                null
+            }
+            "block_app" -> guard(context, cmd.id) { setAppBlocked(context, cmd.arg, true) }
+            "unblock_app" -> guard(context, cmd.id) { setAppBlocked(context, cmd.arg, false) }
+            "set_policy" -> guard(context, cmd.id) { applyPolicyArgument(context, cmd.arg) }
+            "release_policy" -> guard(context, cmd.id) { releasePolicyArgument(context, cmd.arg) }
+            else -> {
+                Log.w(TAG, "unknown command ${cmd.type}")
+                CommandResult(cmd.id, false, "unknown command type: ${cmd.type}")
+            }
         }
     }
+
+    /**
+     * Run the action and turn a null result into success, a thrown message into an
+     * honest failure. Anything the action refuses reports the reason rather than a
+     * bare "false".
+     */
+    private inline fun guard(context: Context, id: String, block: () -> String?): CommandResult {
+        return try {
+            val error = block()
+            if (error == null) CommandResult(id, true, "") else CommandResult(id, false, error)
+        } catch (t: Throwable) {
+            Log.w(TAG, "command $id failed: ${t.message}")
+            CommandResult(id, false, t.message ?: "unexpected error")
+        }
+    }
+
+    // ── the individual actions ────────────────────────────────────────────────
 
     private fun dpm(context: Context): DevicePolicyManager =
         context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
@@ -52,41 +107,108 @@ object CommandExecutor {
     private fun adminComponent(context: Context): ComponentName =
         PrfDeviceAdminReceiver.componentName(context)
 
-    private fun lockDevice(context: Context): Boolean {
-        if (!PrfDeviceAdminReceiver.isAdminActive(context)) return false
+    private fun isDeviceOwner(context: Context): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP &&
+            dpm(context).isDeviceOwnerApp(context.packageName)
+
+    private fun lockDevice(context: Context): String? {
+        if (!PrfDeviceAdminReceiver.isAdminActive(context)) return "device admin is not enabled"
         dpm(context).lockNow()
-        return true
+        return null
     }
 
-    private fun wipeDevice(context: Context): Boolean {
-        val dpm = dpm(context)
-        val isAdmin = PrfDeviceAdminReceiver.isAdminActive(context)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
-            && dpm.isDeviceOwnerApp(context.packageName)
-        ) {
-            dpm.wipeData(0)
-            return true
+    /**
+     * Only the device owner may clear a credential, and only to a PIN it sets itself.
+     * On a device where this app is merely an admin, the system refuses the call —
+     * so we say that instead of claiming the phone was unlocked.
+     */
+    private fun unlockDevice(context: Context): String? {
+        if (!isDeviceOwner(context)) return "unlock requires this app to be the device owner"
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return "unlock requires Android 8 or newer"
+        return try {
+            dpm(context).resetPassword(RECOVERY_PIN)
+            null
+        } catch (t: Throwable) {
+            t.message ?: "resetPassword was refused"
         }
-        if (isAdmin) {
-            dpm.wipeData(0)
-            return true
-        }
-        return false
     }
 
-    private fun setAppBlocked(context: Context, pkg: String, blocked: Boolean): Boolean {
-        if (pkg.isEmpty()) return false
-        val dpm = dpm(context)
-        val isAdmin = PrfDeviceAdminReceiver.isAdminActive(context)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && isAdmin) {
-            try {
-                dpm.setApplicationRestrictions(adminComponent(context), pkg, null)
-                dpm.setUninstallBlocked(adminComponent(context), pkg, blocked)
-                return true
-            } catch (t: Throwable) {
-                Log.w(TAG, "block_app $pkg failed: ${t.message}")
-            }
+    /**
+     * `wipeData` only does anything for a device owner. Calling it as a plain admin
+     * returns success from the API while doing nothing at all, so the device-owner
+     * check happens here rather than being reported as a successful wipe.
+     */
+    private fun wipeDevice(context: Context): String? {
+        if (!PrfDeviceAdminReceiver.isAdminActive(context)) return "device admin is not enabled"
+        if (!isDeviceOwner(context)) {
+            return "wipe requires this app to be the device owner; as a plain admin it would do nothing"
         }
-        return false
+        return try {
+            dpm(context).wipeData(0)
+            null
+        } catch (t: Throwable) {
+            t.message ?: "wipeData was refused"
+        }
     }
+
+    /**
+     * Block an app by pinning it out of the launcher and blocking its uninstall.
+     *
+     * Android has no per-app "make this app invisible" for a non-rooted device, so
+     * pinning is the mechanism that actually works. The control app itself is never
+     * a valid target: locking the owner's own remote control would be the worst
+     * possible outcome.
+     */
+    private fun setAppBlocked(context: Context, pkg: String, blocked: Boolean): String? {
+        if (pkg.isBlank()) return "no package name given"
+        if (pkg == context.packageName) return "the control app is never blocked"
+        if (!PrfDeviceAdminReceiver.isAdminActive(context)) return "device admin is not enabled"
+
+        return try {
+            val admin = adminComponent(context)
+            dpm(context).setUninstallBlocked(admin, pkg, blocked)
+            PolicyEnforcer.refreshPinnedState(context)
+            null
+        } catch (t: Throwable) {
+            t.message ?: "could not change the block state of $pkg"
+        }
+    }
+
+    private fun applyPolicyArgument(context: Context, arg: String): String? {
+        val policy = parsePolicy(arg)
+            ?: return "set_policy argument was not a JSON object"
+        return PolicyEnforcer.apply(context, policy)
+    }
+
+    private fun releasePolicyArgument(context: Context, arg: String): String? {
+        val seconds = arg.toLongOrNull() ?: return "release_policy argument was not a number of seconds"
+        if (seconds < 1 || seconds > 3600) return "release seconds must be between 1 and 3600"
+        // The server owns the release window and re-sends the opened policy on every
+        // poll. All the device has to do is apply what it was just handed.
+        PolicyEnforcer.apply(context, PolicyState())
+        return null
+    }
+
+    private fun parsePolicy(arg: String): PolicyState? {
+        if (arg.isBlank()) return null
+        return try {
+            val obj = json.parseToJsonElement(arg) as? JsonObject ?: return null
+            fun b(k: String) = (obj[k] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toBooleanStrictOrNull() ?: false
+            PolicyState(
+                lockTask = b("lockTask"), camera = b("camera"), contacts = b("contacts"),
+                calls = b("calls"), sms = b("sms"), gallery = b("gallery"), apps = b("apps"),
+                notifications = b("notifications"), uninstall = b("uninstall"),
+                wifi = b("wifi"), airplane = b("airplane")
+            )
+        } catch (t: Throwable) {
+            null
+        }
+    }
+
+    /**
+     * The PIN a remote unlock sets. The owner changes it from the device; it exists
+     * so a lost phone can be opened again from the panel, and is not a secret the
+     * panel holds.
+     */
+    private const val RECOVERY_PIN = "1234"
 }

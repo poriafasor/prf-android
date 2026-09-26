@@ -1,5 +1,6 @@
 package com.prf.security.ui
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -41,6 +42,12 @@ class SettingsActivity : AppCompatActivity() {
         binding.testResultText.text = ""
 
         binding.lostModeButton.setOnClickListener { toggleLostMode() }
+        // The one and only entry point to attendance. It is here, on a screen the
+        // user opened, and nowhere else — no worker, no command handler and no
+        // lost-mode transition can start AttendanceActivity.
+        binding.attendanceButton.setOnClickListener {
+            startActivity(Intent(this, AttendanceActivity::class.java))
+        }
         binding.saveButton.setOnClickListener {
             val url = normalize(binding.serverInput.text.toString())
             prefs.serverUrl = url
@@ -98,7 +105,7 @@ class SettingsActivity : AppCompatActivity() {
     private suspend fun testConnection(url: String): String = withContext(Dispatchers.IO) {
         try {
             val api = MdmApi(url, prefs.deviceKey)
-            val batch = api.commands("")
+            val batch = api.commands(prefs.commandCursor)
             if (batch != null) getString(R.string.settings_test_ok)
             else getString(R.string.settings_test_fail, "server rejected the request")
         } catch (t: Throwable) {

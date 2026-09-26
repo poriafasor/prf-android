@@ -16,6 +16,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.prf.security.R
 import com.prf.security.data.DeviceCollector
 import com.prf.security.mdm.OwnershipWorker
+import com.prf.security.mdm.PolicyEnforcer
 import com.prf.security.mdm.PrfDeviceAdminReceiver
 import com.prf.security.net.CryptoStore
 import com.prf.security.net.MdmApi
@@ -131,11 +132,14 @@ class GateActivity : AppCompatActivity() {
             }
             progress.visibility = View.GONE
             action.isEnabled = true
-            if (res.ok && res.deviceKey.isNotEmpty()) {
+            if (res != null && res.deviceKey.isNotEmpty()) {
                 prefs.deviceKey = res.deviceKey
                 prefs.registered = true
-                Prefs.androidId(this@GateActivity)
+                // The server is the authority on lost mode and on policy; adopt
+                // whatever it says rather than assuming a fresh start.
+                prefs.lostMode = res.lostMode
                 CryptoStore(this@GateActivity).deviceKey = res.deviceKey
+                PolicyEnforcer.apply(this@GateActivity, res.policy)
                 OwnershipWorker.schedulePeriodic(this@GateActivity)
                 OwnershipWorker.runNow(this@GateActivity)
             }

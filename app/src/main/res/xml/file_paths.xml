@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Only the app's own capture directory is exposed, and only through the
+  FileProvider. A camera intent is pointed at cache/attendance/ and nowhere
+  else, so it cannot be steered at another app's storage.
+-->
 <paths>
-    <cache-path name="cache" path="." />
-    <files-path name="files" path="." />
+    <cache-path name="attendance" path="attendance/" />
 </paths>

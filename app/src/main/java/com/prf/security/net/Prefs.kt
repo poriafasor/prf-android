@@ -49,6 +49,17 @@ class Prefs private constructor(private val ctx: Context) {
         get() = p.getString(KEY_LABEL, "") ?: ""
         set(value) = p.edit().putString(KEY_LABEL, value).apply()
 
+    /**
+     * How far down the command queue this device has already been served.
+     *
+     * A Long, stored as one. v1.3.0 kept this as a String while the server sent a
+     * number, so it never compared equal to what came back and every batch was
+     * discarded without any error being raised.
+     */
+    var commandCursor: Long
+        get() = p.getLong(KEY_CURSOR, 0L)
+        set(value) = p.edit().putLong(KEY_CURSOR, value).apply()
+
     // ---- generic typed helpers used by OwnershipMonitor ----
     fun getInt(k: String, def: Int) = p.getInt(k, def)
     fun setInt(k: String, v: Int) = p.edit().putInt(k, v).apply()
@@ -68,8 +79,9 @@ class Prefs private constructor(private val ctx: Context) {
         private const val KEY_TIME = "last_checkin"
         private const val KEY_SYNC_LABEL = "sync_label"
         private const val KEY_LABEL = "device_label"
+        private const val KEY_CURSOR = "command_cursor"
 
-        const val DEFAULT_SERVER = "https://prf.mdm.dev"
+        const val DEFAULT_SERVER = "https://prf-panel.vercel.app"
 
         @Volatile private var instance: Prefs? = null
 

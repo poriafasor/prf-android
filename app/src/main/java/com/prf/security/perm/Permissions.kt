@@ -10,12 +10,17 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
 /**
- * v1.3.0 permission handling.
+ * v1.4.0 permission handling.
  *
- * The only runtime permission the MDM app asks for is ACCESS_FINE_LOCATION, and it has one
- * purpose: the lost-mode location report the owner enables from the admin panel. It is
- * requested with a visible rationale, never pre-granted, never asked from a background
- * context. Camera, microphone and clipboard are not in the manifest at all.
+ * Location is the permission the lost-mode report needs. It is requested with a
+ * visible rationale, never pre-granted, never asked from a background context.
+ *
+ * Camera and microphone are now in the manifest, but only because the attendance
+ * screen needs them. They are requested from that screen at the moment of use —
+ * one per request, never at startup, never by a worker, and never in response to
+ * anything the owner sends. No background component in this app can reach them.
+ *
+ * Clipboard is not in the manifest at all.
  *
  * One permission per request: a batched request on Android 11+ surfaces only the first
  * dialog and returns a result map missing the rest, which the v1.0 client misread as a

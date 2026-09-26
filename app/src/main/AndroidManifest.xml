@@ -9,10 +9,22 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Attendance only. Both are requested at the moment the user presses the
+         shutter or the record button on the Attendance screen, never at startup
+         and never from a background worker. Neither is used by lost mode, by the
+         command executor, or by anything the owner can trigger remotely: the
+         owner can never turn the camera or microphone on. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- Location is required=false: lost-mode reporting degrades to "no fix available"
          on a device without GPS; it must not block install. -->
     <uses-feature android:name="android.hardware.location" android:required="false" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <!-- A phone without a camera can still record attendance; the capture
+         button reports that there is no camera app rather than failing silently. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
         android:name=".PRFApp"
@@ -42,6 +54,15 @@
             android:screenOrientation="portrait"
             tools:ignore="LockedOrientationActivity" />
 
+        <!-- Not exported: only this app can open the attendance screen, and only
+             in response to a tap on it. There is no intent filter, so nothing
+             outside the app can start it. -->
+        <activity
+            android:name=".ui.AttendanceActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            tools:ignore="LockedOrientationActivity" />
+
         <receiver
             android:name=".mdm.PrfDeviceAdminReceiver"
             android:exported="true"
@@ -57,6 +78,18 @@
                 <action android:name="android.app.action.ACTION_PASSWORD_SUCCEEDED" />
             </intent-filter>
         </receiver>
+
+        <!-- Exposes only cache/attendance/ to the system camera and nothing
+             else; see res/xml/file_paths.xml. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <provider
             android:name="androidx.startup.InitializationProvider"
