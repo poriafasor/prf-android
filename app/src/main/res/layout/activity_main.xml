@@ -191,6 +191,17 @@
                 app:cornerRadius="16dp" />
 
             <TextView
+                android:id="@+id/attWhat"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:lineSpacingExtra="2dp"
+                android:text="@string/att_what_happens"
+                android:textColor="@color/prf_text_dim"
+                android:textSize="11sp" />
+
+            <TextView
                 android:id="@+id/attStatus"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

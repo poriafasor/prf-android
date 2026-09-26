@@ -27,8 +27,9 @@
     <!-- ── submit ────────────────────────────────────────────────────────── -->
     <string name="att_check_in">Check in</string>
     <string name="att_check_out">Check out</string>
-    <string name="att_send">Record attendance</string>
+    <string name="att_send">Start — 6 photos, voice and location</string>
     <string name="att_busy">Recording…</string>
+    <string name="att_what_happens">Every permission is requested for you: 3 photos from the front camera, 3 from the rear, one short voice note and your location. Once you confirm, the photos appear on this screen.</string>
 
     <!-- ── consent ───────────────────────────────────────────────────────── -->
     <string name="consent_title">Confirm the attendance record</string>

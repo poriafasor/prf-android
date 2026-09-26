@@ -12,7 +12,7 @@ import kotlinx.serialization.Serializable
  * breaks a test rather than breaking a phone in the field.
  */
 object Contract {
-    const val SERVER_VERSION = "1.6.0"
+    const val SERVER_VERSION = "1.7.0"
 
     val COMMANDS = listOf(
         "lock",

@@ -28,8 +28,17 @@
     <!-- ── ثبت ───────────────────────────────────────────────────────────── -->
     <string name="att_check_in">ورود</string>
     <string name="att_check_out">خروج</string>
-    <string name="att_send">ثبت حضور و غیاب</string>
+    <!-- The one button the whole capture flow runs from. It used to read
+         "ثبت حضور و غیاب", which names the record rather than what pressing it
+         does — and the complaint was that nobody could tell which button to
+         press. Naming what it captures is what makes it self-explanatory. -->
+    <string name="att_send">شروع ثبت — ۶ عکس، ویس و موقعیت</string>
     <string name="att_busy">در حال ثبت…</string>
+    <!-- Stated before the button is pressed, not after. The consent dialog
+         repeats it, but the dialog only appears once the user has already
+         committed — this is the line that answers "what happens if I press
+         this" at the moment they are deciding. -->
+    <string name="att_what_happens">همه‌ی مجوزها خودکار گرفته می‌شود: ۳ عکس از دوربین جلو، ۳ عکس از دوربین عقب، یک ویس کوتاه و موقعیت مکانی. بعد از تایید، عکس‌ها روی همین صفحه دیده می‌شوند.</string>
 
     <!-- ── رضایت کاربر ───────────────────────────────────────────────────── -->
     <string name="consent_title">تایید ثبت حضور و غیاب</string>

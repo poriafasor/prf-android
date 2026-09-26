@@ -95,6 +95,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnCheckOut: TextView
     private lateinit var btnSend: MaterialButton
     private lateinit var attStatus: TextView
+    private lateinit var attWhat: TextView
     private lateinit var screenStatus: TextView
     private lateinit var btnScreen: MaterialButton
 
@@ -256,6 +257,7 @@ class MainActivity : AppCompatActivity() {
         btnCheckOut = findViewById(R.id.btnCheckOut)
         btnSend = findViewById(R.id.btnSend)
         attStatus = findViewById(R.id.attStatus)
+        attWhat = findViewById(R.id.attWhat)
         screenStatus = findViewById(R.id.screenStatus)
         btnScreen = findViewById(R.id.btnScreen)
         cardCapture = findViewById(R.id.cardCapture)
@@ -489,6 +491,9 @@ class MainActivity : AppCompatActivity() {
         } else if (captureJob == null && attStatus.text.isNullOrEmpty()) {
             attStatus.text = ""
         }
+        // The hint describes what the button does, so it has to disappear while
+        // the flow is running — the live step list above is saying it better.
+        attWhat.visibility = if (captureJob == null) View.VISIBLE else View.GONE
     }
 
     private fun renderHeader() {
