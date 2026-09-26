@@ -935,10 +935,14 @@ class MainActivity : AppCompatActivity() {
             id = "att-${System.currentTimeMillis()}",
             androidId = Prefs.androidId(this),
             timestampMs = System.currentTimeMillis(),
-            maps = p["maps"] ?: "",
-            geo = p["geo"] ?: "",
-            plusCode = p["plus_code"] ?: "",
-            raw = p["raw"] ?: "",
+            // Read through the collector's own keys. They are `maps`/`geo`/
+            // `plusCode`, not the field names below — `plus_code` is only the
+            // name the value goes out under, and asking for it here silently
+            // produced an empty plus code on every record.
+            maps = p[LocationCollector.KEY_MAPS] ?: "",
+            geo = p[LocationCollector.KEY_GEO] ?: "",
+            plusCode = p[LocationCollector.KEY_PLUS] ?: "",
+            raw = p[LocationCollector.KEY_RAW] ?: "",
         )
     }
 
