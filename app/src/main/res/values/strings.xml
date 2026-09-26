@@ -7,7 +7,7 @@
     <string name="mdm_onboarding_body">This app protects this phone if it is lost, and records attendance when you ask it to.
 
 What it does, in plain terms:
-• It reports to the owner's console whether the phone is locked and how many wrong unlock attempts have happened.
+• It reports to the owner\'s console whether the phone is locked and how many wrong unlock attempts have happened.
 • If the owner marks the phone lost, it reports its location, as a map link, coordinates and Plus Code.
 • The owner can lock the phone remotely, and erase it if this app is set as the device owner.
 • When you open the Attendance screen and press the shutter, it takes a photo. When you press Record, it records a voice note. Both are sent only when you press Send, and the record is permanent.
@@ -21,7 +21,7 @@ Continue to activate this device.</string>
     <string name="mdm_activate">Activate this device</string>
     <string name="mdm_active_body">This device is under management.
 
-The owner's console receives lock state and failed unlock attempts.
+The owner\'s console receives lock state and failed unlock attempts.
 Location is reported only while lost mode is on.
 The camera and microphone are used only by the Attendance screen, only while you are using it, and only on your tap.
 No messages, contacts or clipboard are read.</string>
