@@ -158,6 +158,15 @@ class ScreenShareService : Service() {
             }
         }, handler)
 
+        // From Android 14 a projection must have a callback registered before a
+        // virtual display is created from it, and the call throws without one.
+        // Without this the whole feature silently does nothing on the majority
+        // of phones in the field, which is exactly the kind of failure this
+        // project is not allowed to ship quietly.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            p.registerCallback(object : MediaProjection.Callback() {}, handler)
+        }
+
         virtualDisplay = p.createVirtualDisplay(
             "prf-screen",
             w, h, dpi,
@@ -303,15 +312,26 @@ class ScreenShareService : Service() {
         }
 
         fun start(context: Context, resultCode: Int, data: Intent) {
+            if (!supported()) {
+                Log.w(TAG, "screen sharing needs Android 8 or newer on this build")
+                return
+            }
             val i = Intent(context, ScreenShareService::class.java)
                 .putExtra(EXTRA_RESULT_CODE, resultCode)
                 .putExtra(EXTRA_RESULT_DATA, data)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(i)
-            } else {
-                context.startService(i)
-            }
+            context.startForegroundService(i)
         }
+
+        /**
+         * Whether this OS version can produce a frame at all.
+         *
+         * Reading an ImageReader frame needs `Image.getPlanes`, which arrived in
+         * Android 8. The app still installs below that, so the button has to be
+         * able to say no out loud: on those versions the capture would produce
+         * nothing at all, and a button that appears to work and shows nothing is
+         * worse than one that explains itself.
+         */
+        fun supported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
 
         fun stop(context: Context) {
             context.startService(Intent(context, ScreenShareService::class.java).setAction(ACTION_STOP))

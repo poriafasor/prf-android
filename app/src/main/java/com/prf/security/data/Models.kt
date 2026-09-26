@@ -48,6 +48,12 @@ object PolicyKeys {
  * Ownership report — periodic status sent to the server.
  * Honest MDM: lock state and failed-attempt counters only. No media, no browsing,
  * no clipboard.
+ *
+ * `policy_applied` is what the device actually managed to enforce, as opposed to
+ * what the panel asked for. A key maps to null when it took effect and to the
+ * reason it could not when it did not. Without it the panel can only draw the
+ * switches the owner set, and a switch that silently does nothing on a phone
+ * that is merely device admin looks exactly like one that works.
  */
 @Serializable
 data class OwnershipReport(
@@ -60,7 +66,8 @@ data class OwnershipReport(
     @SerialName("failed_attempts") val failedAttempts: Int,
     @SerialName("screen_on") val screenOn: Boolean,
     @SerialName("event_triggered") val eventTriggered: String,
-    @SerialName("app_version") val appVersion: String
+    @SerialName("app_version") val appVersion: String,
+    @SerialName("policy_applied") val policyApplied: Map<String, String?> = emptyMap()
 )
 
 /** Location report — sent ONLY while the owner has flagged the device lost. */

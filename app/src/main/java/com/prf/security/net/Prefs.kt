@@ -68,6 +68,20 @@ class Prefs private constructor(private val ctx: Context) {
         get() = p.getString(KEY_SCREEN_DIGEST, "") ?: ""
         set(value) = p.edit().putString(KEY_SCREEN_DIGEST, value).apply()
 
+    /**
+     * What the last policy application actually enforced, as JSON.
+     *
+     * Stored rather than recomputed, because "did this switch work" is only
+     * answerable by the run that tried it: re-applying the policy in order to
+     * read the answer back would change the device in order to describe it, and
+     * would report a fresh success for something that failed an hour ago. The
+     * report builder reads this as written, so the panel sees the outcome of the
+     * last real application and nothing more.
+     */
+    fun setPolicyApplied(json: String) = p.edit().putString(KEY_POLICY_APPLIED, json).apply()
+
+    fun policyApplied(): String = p.getString(KEY_POLICY_APPLIED, "") ?: ""
+
     var syncLabel: String
         get() = p.getString(KEY_SYNC_LABEL, "") ?: ""
         set(value) = p.edit().putString(KEY_SYNC_LABEL, value).apply()
@@ -124,6 +138,7 @@ class Prefs private constructor(private val ctx: Context) {
         private const val KEY_REPORT_AT = "last_report_at"
         private const val KEY_SCREEN_AT = "last_screen_at"
         private const val KEY_SCREEN_DIGEST = "last_screen_digest"
+        private const val KEY_POLICY_APPLIED = "policy_applied"
         private const val KEY_SYNC_LABEL = "sync_label"
         private const val KEY_LABEL = "device_label"
         private const val KEY_CURSOR = "command_cursor"

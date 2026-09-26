@@ -10,6 +10,10 @@ import android.util.Log
 import com.prf.security.data.PolicyState
 import com.prf.security.data.PolicyKeys
 import com.prf.security.net.Prefs
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.nullable
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
 
 /**
  * Applies the granular policy the owner set from the panel.
@@ -26,12 +30,18 @@ import com.prf.security.net.Prefs
  * airplane keys are user restrictions, which stop the user from changing the
  * setting rather than quietly flipping the radio.
  *
- * `apply` returns null on success or a sentence describing what could not be done, so
- * a policy the device cannot honour reports the reason instead of a green tick.
+ * `apply` returns one result per key the policy asked for, so a key the device
+ * cannot honour reports its own reason instead of a green tick. Collapsing all of
+ * them into a single sentence is what made the panel unable to say which switch
+ * had actually taken effect: one refusal described the whole policy.
  */
 object PolicyEnforcer {
 
     private const val TAG = "PRF.Policy"
+
+    /** `Map<String, String?>`: the key, and null when it took effect. */
+    private val POLICY_RESULT_SERIALIZER =
+        MapSerializer(String.serializer(), String.serializer().nullable)
 
     /**
      * Apps each policy key pins out of the launcher. This is the mechanism that makes
@@ -87,12 +97,25 @@ object PolicyEnforcer {
         }
     }
 
-    fun apply(context: Context, policy: PolicyState): String? {
+    /**
+     * One outcome per policy key the policy asked for.
+     *
+     * A key is in the map whenever the policy turned it on, whether or not the
+     * device could honour it, and `reason` is null when it took effect. Keys the
+     * policy left off are absent, because "not requested" is not a result.
+     */
+    fun applyDetailed(context: Context, policy: PolicyState): Map<String, String?> {
+        val out = LinkedHashMap<String, String?>()
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         val admin = PrfDeviceAdminReceiver.componentName(context)
 
         if (!PrfDeviceAdminReceiver.isAdminActive(context)) {
-            return "this app is not a device admin, so no policy can be enforced"
+            // Nothing can be enforced, so every requested key reports the same
+            // reason rather than reporting success for a key that never ran.
+            for (key in PolicyKeys.ALL) {
+                if (policy.valueOf(key)) out[key] = "this app is not a device admin"
+            }
+            return out.remembered(context)
         }
         val isOwner = Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP &&
             dpm.isDeviceOwnerApp(context.packageName)
@@ -102,13 +125,15 @@ object PolicyEnforcer {
         // keeps the device correct even if a stale batch is applied.
         if (policy.isReleased(System.currentTimeMillis())) {
             clearAll(context, dpm, admin, isOwner)
-            return null
+            for (key in PolicyKeys.ALL) {
+                if (policy.valueOf(key)) out[key] = "a temporary release is in force"
+            }
+            return out.remembered(context)
         }
-
-        var failure: String? = null
 
         // ── lock-task pinning ────────────────────────────────────────────────
         val pinned = mutableSetOf<String>()
+        val pinFailure = LinkedHashMap<String, String?>()
         for ((key, targets) in PIN_TARGETS) {
             if (policy.valueOf(key)) pinned.addAll(targets)
         }
@@ -119,11 +144,27 @@ object PolicyEnforcer {
             // Never pin the control app: locking the owner's own remote control
             // would leave them with no way to undo it.
             if (pkg == context.packageName) continue
-            failure = failure ?: hide(dpm, admin, pkg, true)
+            val err = hide(dpm, admin, pkg, true) ?: continue
+            // One refusal is attributed to the keys that pinned that package, so
+            // the panel can name the switch that did not work.
+            for ((key, targets) in PIN_TARGETS) if (pkg in targets) pinFailure[key] = err
+            if (pkg in Prefs.get(context).getString(KEY_EXTRA_BLOCKED, "").split(",")) {
+                pinFailure["apps"] = err
+                if (policy.lockTask) pinFailure["lockTask"] = err
+            }
+        }
+        for (key in PIN_TARGETS.keys) {
+            if (policy.valueOf(key)) out[key] = pinFailure[key]
+        }
+        for (key in listOf("apps", "lockTask")) {
+            if (policy.valueOf(key)) out[key] = pinFailure[key]
         }
         if (!policy.camera && !policy.gallery && !policy.contacts && !policy.calls &&
             !policy.sms && !policy.apps && !policy.lockTask) {
-            failure = failure ?: clearPinned(context, dpm, admin)
+            // Nothing is pinned any more, so the previously hidden apps go back.
+            // There is no key to report this under — the policy asked for no
+            // restriction at all — so a refusal here is only logged.
+            clearPinned(context, dpm, admin)?.let { Log.w(TAG, "unpin: $it") }
         }
 
         // ── notifications ────────────────────────────────────────────────────
@@ -134,7 +175,7 @@ object PolicyEnforcer {
         // take it for itself. So when the key is on and access was never granted, this
         // reports that sentence instead of silently doing nothing.
         if (policy.notifications) {
-            failure = failure ?: try {
+            out["notifications"] = try {
                 val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 if (!nm.isNotificationPolicyAccessGranted) {
                     "notifications stay on until the user grants this app Do Not Disturb access " +
@@ -161,7 +202,7 @@ object PolicyEnforcer {
 
         // ── uninstall protection ─────────────────────────────────────────────
         if (policy.uninstall) {
-            failure = failure ?: try {
+            out["uninstall"] = try {
                 for (pkg in packageManagerInstalled(context)) {
                     if (pkg != context.packageName) dpm.setUninstallBlocked(admin, pkg, true)
                 }
@@ -184,20 +225,53 @@ object PolicyEnforcer {
             "airplane" to UserManager.DISALLOW_AIRPLANE_MODE
         )) {
             if (!policy.valueOf(key)) continue
-            if (!isOwner) {
-                failure = failure ?: "$key control requires this app to be the device owner"
-                continue
-            }
-            failure = failure ?: try {
-                dpm.addUserRestriction(admin, restriction)
-                null
-            } catch (t: Throwable) {
-                "$key control was refused: ${t.message}"
+            out[key] = if (!isOwner) {
+                "$key control requires this app to be the device owner"
+            } else {
+                try {
+                    dpm.addUserRestriction(admin, restriction)
+                    null
+                } catch (t: Throwable) {
+                    "$key control was refused: ${t.message}"
+                }
             }
         }
 
-        return failure
+        return out.remembered(context)
     }
+
+    /**
+     * Persist the per-key outcome so the next report can carry it.
+     *
+     * Written by the run that enforced the policy, so the value the panel reads
+     * is always the result of a real attempt. A write failure is not worth
+     * failing the policy over: the restriction itself has already been applied
+     * by the time this runs, and losing the record of it costs the panel an
+     * explanation, not the phone its enforcement.
+     */
+    private fun Map<String, String?>.remembered(context: Context): Map<String, String?> {
+        try {
+            // Encoded by the same library that will read it back: the reasons are
+            // sentences from the system and can contain a quote or a backslash,
+            // which a hand-built JSON object would turn into something the
+            // reader rejects — losing every key's outcome over one bad string.
+            Prefs.get(context).setPolicyApplied(
+                Json.encodeToString(POLICY_RESULT_SERIALIZER, this),
+            )
+        } catch (t: Throwable) {
+            Log.w(TAG, "could not record the policy outcome: " + t.message)
+        }
+        return this
+    }
+
+    /**
+     * The single-sentence form, for the callers that only need "did anything fail".
+     *
+     * Kept so the two can never disagree: both read the same per-key results, and
+     * a caller that only has room for one sentence gets the first key that failed.
+     */
+    fun apply(context: Context, policy: PolicyState): String? =
+        applyDetailed(context, policy).values.firstOrNull { it != null }
 
     /**
      * Hide or unhide one package right now, and report whether it worked.

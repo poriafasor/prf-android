@@ -197,6 +197,12 @@ class MainActivity : AppCompatActivity() {
             render()
             return
         }
+        if (!ScreenShareService.supported()) {
+            // Said plainly rather than opening a dialog that could only ever
+            // produce nothing on this OS version.
+            toast(getString(R.string.screen_needs_android8))
+            return
+        }
         // From Android 13 the projection's mandatory notification is invisible
         // without this permission, and from Android 14 the system tears the
         // projection down when the notification cannot be posted. Asking here,
@@ -396,13 +402,16 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, p, 0, p)
         }
 
-        val text = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        text.addView(TextView(this).apply {
+        // Named `labels`, not `text`: a local called `text` shadows the
+        // TextView property inside these apply blocks, and `text = …` would then
+        // be an assignment to a val instead of the view's text.
+        val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        labels.addView(TextView(this).apply {
             text = getString(spec.label)
             textSize = 13f
             setTextColor(color(R.color.prf_text))
         })
-        text.addView(TextView(this).apply {
+        labels.addView(TextView(this).apply {
             text = when (state) {
                 PermState.GRANTED -> getString(R.string.perm_granted)
                 PermState.NOT_ASKED -> getString(R.string.perm_not_asked)
@@ -419,7 +428,7 @@ class MainActivity : AppCompatActivity() {
                 },
             ))
         })
-        text.addView(TextView(this).apply {
+        labels.addView(TextView(this).apply {
             text = getString(spec.why)
             textSize = 10f
             setTextColor(color(R.color.prf_text_dim))
@@ -441,7 +450,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        row.addView(text, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(labels, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         action?.let {
             val p = dp(8)
             row.addView(it, LinearLayout.LayoutParams(

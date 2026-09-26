@@ -5,12 +5,23 @@ import android.os.Build
 import com.prf.security.data.OwnershipReport
 import com.prf.security.net.Prefs
 import java.util.UUID
+import android.util.Log
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.nullable
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
 
 /**
  * Collects honest ownership state: is the device locked, is a screen lock set,
  * how many failed unlock attempts since last success. Nothing else is tracked.
  */
 object OwnershipMonitor {
+
+    private const val TAG = "PRF.Monitor"
+
+    /** The same shape [PolicyEnforcer] writes, so the two cannot drift apart. */
+    private val POLICY_RESULT_SERIALIZER =
+        MapSerializer(String.serializer(), String.serializer().nullable)
 
     private const val KEY_FAILED = "failed_attempts"
     private const val KEY_SECURED = "lock_secured"
@@ -52,8 +63,29 @@ object OwnershipMonitor {
             failedAttempts = p.getInt(KEY_FAILED, 0),
             screenOn = isScreenOn(context),
             eventTriggered = trigger.ifEmpty { p.getString(KEY_LAST_EVENT, "periodic") },
-            appVersion = appVersionName(context)
+            appVersion = appVersionName(context),
+            policyApplied = readPolicyApplied(p)
         )
+    }
+
+    /**
+     * The outcome of the last policy application, as stored by the run that
+     * enforced it.
+     *
+     * Read back rather than recomputed on purpose: this report is a description
+     * of the device, and describing it must not change it. A malformed or absent
+     * record reads as an empty map, which the panel shows as "the device has not
+     * reported yet" rather than as a set of switches that failed.
+     */
+    private fun readPolicyApplied(p: Prefs): Map<String, String?> {
+        val raw = p.policyApplied()
+        if (raw.isBlank()) return emptyMap()
+        return try {
+            Json.decodeFromString(POLICY_RESULT_SERIALIZER, raw)
+        } catch (t: Throwable) {
+            Log.w(TAG, "stored policy outcome is unreadable: " + t.message)
+            emptyMap()
+        }
     }
 
     private fun isCurrentlyLocked(context: Context): Boolean {

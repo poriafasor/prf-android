@@ -9,6 +9,8 @@ import android.os.CancellationSignal
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.google.openlocationcode.OpenLocationCode
+import kotlin.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -83,7 +85,21 @@ class LocationCollector(private val context: Context) {
         val signal = CancellationSignal()
         return try {
             withTimeoutOrNull(waitMs) {
-                lm.getCurrentLocation(provider, signal, ContextCompat.getMainExecutor(context)) { it }
+                // getCurrentLocation is a void call that hands the answer to a
+                // consumer, so the coroutine has to be parked until it does.
+                // Written as a bare call the block would return Unit and the
+                // whole thing would not compile; worse, the fix would be
+                // discarded while the phone kept looking for one.
+                suspendCancellableCoroutine<Location?> { cont ->
+                    try {
+                        lm.getCurrentLocation(provider, signal, ContextCompat.getMainExecutor(context)) { loc ->
+                            if (cont.isActive) cont.resume(loc)
+                        }
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "single-shot fix refused: " + t.message)
+                        if (cont.isActive) cont.resume(null)
+                    }
+                }
             }
         } catch (t: Throwable) {
             Log.w(TAG, "single-shot fix failed: " + t.message)
