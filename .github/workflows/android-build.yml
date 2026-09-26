@@ -69,9 +69,17 @@ jobs:
         env:
           PRF_TOKEN: ${{ secrets.PRF_TOKEN }}
         run: |
-          set -o pipefail
+          # `set +e` is the load-bearing line. GitHub runs every `run:` block under
+          # `bash -e`, so with pipefail on, a failing pipeline aborts the script
+          # right there and nothing after it executes — which is why the reporting
+          # below was never reached and the failure looked like a bare
+          # "Process completed with exit code 1" with no diagnostic anywhere.
+          # Turning errexit off for the build lets PIPESTATUS be read, and the
+          # original status is re-raised at the end so the step still fails.
+          set +e
           ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
           status=${PIPESTATUS[0]}
+          set -e
           if [ "$status" -ne 0 ]; then
             {
               echo "### Build failed (exit $status)"
