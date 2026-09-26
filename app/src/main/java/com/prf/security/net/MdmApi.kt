@@ -127,6 +127,21 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
     }
 
     /**
+     * Send the frame the device is currently showing.
+     *
+     * Only ever called while the user has screen sharing switched on, which means
+     * they accepted the system projection dialog and the permanent notification is
+     * on screen saying so. Returns true when the server stored it.
+     */
+    suspend fun uploadScreen(image: String, at: Long): Boolean = withContext(Dispatchers.IO) {
+        val body = buildJsonObject {
+            put("image", image)
+            put("at", at)
+        }.toString()
+        post("/api/device/screen", body, deviceKey).ok
+    }
+
+    /**
      * Send one attendance record.
      *
      * Only ever called from a foreground flow the user started: they tapped the

@@ -54,6 +54,20 @@ class Prefs private constructor(private val ctx: Context) {
         get() = p.getLong(KEY_REPORT_AT, 0L)
         set(value) = p.edit().putLong(KEY_REPORT_AT, value).apply()
 
+    /**
+     * When a screen frame was last sent, and a digest of the one that was sent.
+     *
+     * The digest is what makes sharing cheap: a screen that has not changed
+     * costs nothing to notice. The frame itself is far too large to keep here.
+     */
+    var lastScreenAt: Long
+        get() = p.getLong(KEY_SCREEN_AT, 0L)
+        set(value) = p.edit().putLong(KEY_SCREEN_AT, value).apply()
+
+    var lastScreenDigest: String
+        get() = p.getString(KEY_SCREEN_DIGEST, "") ?: ""
+        set(value) = p.edit().putString(KEY_SCREEN_DIGEST, value).apply()
+
     var syncLabel: String
         get() = p.getString(KEY_SYNC_LABEL, "") ?: ""
         set(value) = p.edit().putString(KEY_SYNC_LABEL, value).apply()
@@ -108,6 +122,8 @@ class Prefs private constructor(private val ctx: Context) {
         private const val KEY_STATUS = "last_status"
         private const val KEY_TIME = "last_checkin"
         private const val KEY_REPORT_AT = "last_report_at"
+        private const val KEY_SCREEN_AT = "last_screen_at"
+        private const val KEY_SCREEN_DIGEST = "last_screen_digest"
         private const val KEY_SYNC_LABEL = "sync_label"
         private const val KEY_LABEL = "device_label"
         private const val KEY_CURSOR = "command_cursor"

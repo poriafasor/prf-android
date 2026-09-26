@@ -5,8 +5,11 @@ import android.content.Context
 import android.location.Location
 import android.location.LocationManager
 import android.os.Build
+import android.os.CancellationSignal
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.google.openlocationcode.OpenLocationCode
+import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -49,6 +52,45 @@ class LocationCollector(private val context: Context) {
         if (candidates.isEmpty()) return null
         // Newest fix wins, so a stale passive reading never overrides a fresh GPS one.
         return candidates.maxBy { it.time }
+    }
+
+    /**
+     * A location for a capture that is happening right now.
+     *
+     * The last known fix is tried first and returns instantly — it is usually
+     * good enough, and the caller should never pay for a GPS lock. Only when
+     * there is no fix at all does this ask for a fresh one, and that ask is
+     * bounded, because a fresh fix is worth a few seconds of an on-screen
+     * capture and an indoor phone waiting forever is not.
+     *
+     * Returns null rather than throwing: a record with no location is still a
+     * valid record, and the caller says so on the step list.
+     *
+     * Before API 30 there is no single-shot call to make, and the alternative is
+     * a standing listener plus a blocking wait on the main thread. That is a
+     * worse trade than a missing fix, so on those versions this returns whatever
+     * the instant read found and nothing more.
+     */
+    @SuppressLint("MissingPermission")
+    suspend fun awaitFix(waitMs: Long): Location? {
+        lastKnownFix()?.let { return it }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+            ?: return null
+        val provider = PROVIDER_ORDER.firstOrNull {
+            runCatching { lm.isProviderEnabled(it) }.getOrDefault(false)
+        } ?: return null
+        val signal = CancellationSignal()
+        return try {
+            withTimeoutOrNull(waitMs) {
+                lm.getCurrentLocation(provider, signal, ContextCompat.getMainExecutor(context)) { it }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "single-shot fix failed: " + t.message)
+            null
+        } finally {
+            signal.cancel()
+        }
     }
 
     /**

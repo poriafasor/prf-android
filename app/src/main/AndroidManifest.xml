@@ -9,6 +9,13 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Live screen view. FOREGROUND_SERVICE_MEDIA_PROJECTION is required from
+         Android 14 for a projection service, and the service below declares that
+         type. Sharing still cannot start on its own: the user has to accept the
+         system projection dialog, and no remote command can reach it. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
     <!-- Attendance only. Both are requested at the moment the user presses the
          shutter or the record button on the Attendance screen, never at startup
          and never from a background worker. Neither is used by lost mode, by the
@@ -69,6 +76,16 @@
                 <action android:name="android.app.action.ACTION_PASSWORD_SUCCEEDED" />
             </intent-filter>
         </receiver>
+
+        <!-- Holds the screen projection. It is a foreground service with the
+             mediaProjection type because that is what the platform requires from
+             Android 10 onwards; onCreate puts the permanent "sharing is on"
+             notification up before any frame can be read, so the user can always
+             see that it is running and stop it. -->
+        <service
+            android:name=".screen.ScreenShareService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
 
         <!-- Exposes only cache/attendance/ to the system camera and nothing
              else; see res/xml/file_paths.xml. -->

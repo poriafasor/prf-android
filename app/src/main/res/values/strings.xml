@@ -74,6 +74,32 @@
     <string name="att_open_settings">باز کردن تنظیمات</string>
     <string name="att_server_down">سرور در دسترس نیست</string>
 
+    <!-- ── مجوزها ───────────────────────────────────────────────────────── -->
+    <string name="perm_title">دسترسی‌ها</string>
+    <string name="perm_summary">هر سطر وضعیت واقعی همان یک مجوز را نشان می‌دهد. دکمه‌ی ثبت حضور و غیاب خودش همه‌ی این‌ها را به ترتیب می‌گیرد؛ این سطرها فقط برای دیدن و روشن‌کردن تکی هستند.</string>
+    <string name="perm_all_ok">همه‌ی دسترسی‌های لازم داده شده است.</string>
+    <string name="perm_missing_count">%1$d دسترسی هنوز داده نشده است.</string>
+    <string name="perm_granted">داده شده</string>
+    <string name="perm_not_asked">هنوز پرسیده نشده</string>
+    <string name="perm_denied">رد شده</string>
+    <string name="perm_blocked">از تنظیمات باید باز شود</string>
+    <string name="perm_grant">اجازه می‌دهم</string>
+    <string name="perm_camera">دوربین</string>
+    <string name="perm_mic">میکروفون</string>
+    <string name="perm_location">موقعیت مکانی</string>
+    <string name="perm_notifications">اعلان‌ها</string>
+    <string name="perm_camera_why">برای گرفتن سه عکس از هر دوربین.</string>
+    <string name="perm_mic_why">برای ضبط یک ویس کوتاه.</string>
+    <string name="perm_location_why">برای نوشتن محل این رکورد. بدون آن، رکورد بدون موقعیت ثبت می‌شود.</string>
+    <string name="perm_notifications_why">برای اینکه اعلان دائمیِ اشتراک صفحه دیده شود. اندروید ۱۴ بدون این اعلان اجازه‌ی اشتراک صفحه نمی‌دهد.</string>
+    <string name="perm_not_available">این گوشی اصلاً از این دسترسی پشتیبانی نمی‌کند.</string>
+    <string name="cap_permission_location">گرفتن اجازه‌ی موقعیت مکانی</string>
+    <string name="cap_locating">خواندن موقعیت مکانی</string>
+    <string name="cap_located">موقعیت مکانی ثبت شد</string>
+    <string name="cap_no_location">موقعیت مکانی به دست نیامد.</string>
+    <string name="att_perm_denied_location">اجازه‌ی موقعیت مکانی داده نشد، پس رکورد بدون موقعیت ثبت شد.</string>
+    <string name="att_missing_register">برای ثبت، اول پایین‌تر همین صفحه دکمه‌ی «ثبت گوشی در سرور» را بزنید.</string>
+
     <!-- ── اطلاعات دستگاه ───────────────────────────────────────────────── -->
     <string name="spec_title">اطلاعات دستگاه</string>
     <string name="spec_subtitle">همین لحظه از همین گوشی خوانده می‌شود و همراه رکورد ارسال می‌شود.</string>
@@ -138,4 +164,10 @@
     <string name="lbl_locale">زبان</string>
     <string name="lbl_timezone">منطقه زمانی</string>
     <string name="lbl_uptime">مدت روشن بودن</string>
+    <string name="screen_title">نمای زنده صفحه</string>
+    <string name="screen_explanation">با زدن این دکمه، خود گوشی از شما اجازه می‌گیرد و تصویر صفحه در پنل مدیریت دیده می‌شود. تا وقتی روشن باشد یک اعلان دائمی در نوار اعلان‌ها می‌ماند و با زدن همان اعلان خاموش می‌شود. هیچ‌وقت بدون اجازه‌ی شما روشن نمی‌شود و از راه دور هم قابل فعال‌کردن نیست.</string>
+    <string name="screen_toggle">نمایش صفحه در پنل</string>
+    <string name="screen_on">روشن است — صفحه‌ی گوشی در پنل دیده می‌شود.</string>
+    <string name="screen_off">خاموش است.</string>
+    <string name="screen_toggle_off">خاموش‌کردن نمایش صفحه</string>
 </resources>

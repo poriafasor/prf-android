@@ -18,6 +18,7 @@ import com.prf.security.data.OwnershipReport
 import com.prf.security.location.LocationCollector
 import com.prf.security.net.MdmApi
 import com.prf.security.net.Prefs
+import com.prf.security.screen.ScreenShareService
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -55,6 +56,8 @@ class OwnershipWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
             // Commands first, and unconditionally. This is the part the owner is
             // actually waiting on, and it is the part that costs nothing.
             pollCommands(prefs, api)
+
+            uploadScreenFrame(prefs, api, now)
 
             if (now - prefs.lastReportAt >= REPORT_MS) {
                 val report = OwnershipMonitor.buildReport(applicationContext, "periodic")
@@ -117,6 +120,35 @@ class OwnershipWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
      */
     private fun isChainLink(): Boolean =
         inputData.getBoolean(KEY_CHAIN_LINK, true)
+
+    /**
+     * Send the current screen frame, if the user is sharing and one is due.
+     *
+     * Every accepted frame is a write on the server and costs a git commit, so
+     * this is throttled hard: one frame every [SCREEN_MS] at most, and only when
+     * the frame has actually changed since the last upload. A user leaving
+     * sharing on all day would otherwise spend the whole commit budget — and
+     * with it the attendance writes and the command queue — on frames.
+     *
+     * When sharing is off, `currentFrame` returns null and there is nothing to
+     * send, so the user not sharing costs nothing and leaves no trace.
+     */
+    private suspend fun uploadScreenFrame(prefs: Prefs, api: MdmApi, now: Long) {
+        if (!ScreenShareService.running) return
+        if (now - prefs.lastScreenAt < SCREEN_MS) return
+
+        val (frame, capturedAt) = ScreenShareService.currentFrame() ?: return
+        // The screen has not moved since the last frame we sent. Sending it again
+        // would cost a commit to tell the panel nothing it did not already know.
+        // Compared by digest: the frame itself is far too big to keep in prefs.
+        val digest = Integer.toHexString(frame.hashCode())
+        if (digest == prefs.lastScreenDigest) return
+
+        if (api.uploadScreen(frame, capturedAt)) {
+            prefs.lastScreenAt = now
+            prefs.lastScreenDigest = digest
+        }
+    }
 
     /**
      * Ask for owner work and act on it.
@@ -185,6 +217,15 @@ class OwnershipWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
          * rhythm the old schedule was chosen for.
          */
         private const val REPORT_MS = 15 * 60_000L
+
+        /**
+         * The shortest gap between two screen frames.
+         *
+         * A frame is a write, so this is a commit each time. Two minutes keeps a
+         * shared screen looking live while leaving the budget to the things that
+         * are not continuous.
+         */
+        private const val SCREEN_MS = 2 * 60_000L
 
         private fun netConstraints() = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)

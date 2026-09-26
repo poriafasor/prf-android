@@ -31,6 +31,14 @@ object Permissions {
 
     private const val PREFS = "prf_perm_state"
 
+    /**
+     * Precise location, as a constant.
+     *
+     * The permissions card needs to name this permission for every row it draws,
+     * and calling a function to get a value that cannot change is noise.
+     */
+    const val LOCATION = android.Manifest.permission.ACCESS_FINE_LOCATION
+
     /** Precise location. Used only for the lost-mode report. */
     fun location() = android.Manifest.permission.ACCESS_FINE_LOCATION
 
