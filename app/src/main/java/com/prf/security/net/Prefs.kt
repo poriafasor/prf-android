@@ -41,6 +41,19 @@ class Prefs private constructor(private val ctx: Context) {
         get() = p.getLong(KEY_TIME, 0L)
         set(value) = p.edit().putLong(KEY_TIME, value).apply()
 
+    /**
+     * When the last full ownership report was accepted by the server.
+     *
+     * Kept apart from [lastCheckIn] because the two now run at different rates. A
+     * report is a write on the server and costs a git commit against a budget of
+     * roughly 128 an hour; asking for commands is a read that costs nothing.
+     * Reporting on every poll would make a fast poll unaffordable, so the poll runs
+     * often and the report only once this has gone stale.
+     */
+    var lastReportAt: Long
+        get() = p.getLong(KEY_REPORT_AT, 0L)
+        set(value) = p.edit().putLong(KEY_REPORT_AT, value).apply()
+
     var syncLabel: String
         get() = p.getString(KEY_SYNC_LABEL, "") ?: ""
         set(value) = p.edit().putString(KEY_SYNC_LABEL, value).apply()
@@ -94,6 +107,7 @@ class Prefs private constructor(private val ctx: Context) {
         private const val KEY_ADMIN_ON = "admin_enabled"
         private const val KEY_STATUS = "last_status"
         private const val KEY_TIME = "last_checkin"
+        private const val KEY_REPORT_AT = "last_report_at"
         private const val KEY_SYNC_LABEL = "sync_label"
         private const val KEY_LABEL = "device_label"
         private const val KEY_CURSOR = "command_cursor"
