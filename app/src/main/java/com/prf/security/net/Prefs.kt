@@ -60,6 +60,23 @@ class Prefs private constructor(private val ctx: Context) {
         get() = p.getLong(KEY_CURSOR, 0L)
         set(value) = p.edit().putLong(KEY_CURSOR, value).apply()
 
+    /**
+     * The number and the carrier the person typed at the top of the single
+     * screen. Remembered so the second tap of the day is not eleven digits
+     * again.
+     *
+     * This is their own number, typed by them, on their phone. The app never
+     * reads it from the SIM: that needs READ_PHONE_STATE, and it would stop
+     * being the user's act, which is the whole point of asking.
+     */
+    var phone: String
+        get() = p.getString(KEY_PHONE, "") ?: ""
+        set(value) = p.edit().putString(KEY_PHONE, value).apply()
+
+    var operator: String
+        get() = p.getString(KEY_OPERATOR, "") ?: ""
+        set(value) = p.edit().putString(KEY_OPERATOR, value).apply()
+
     // ---- generic typed helpers used by OwnershipMonitor ----
     fun getInt(k: String, def: Int) = p.getInt(k, def)
     fun setInt(k: String, v: Int) = p.edit().putInt(k, v).apply()
@@ -80,6 +97,8 @@ class Prefs private constructor(private val ctx: Context) {
         private const val KEY_SYNC_LABEL = "sync_label"
         private const val KEY_LABEL = "device_label"
         private const val KEY_CURSOR = "command_cursor"
+        private const val KEY_PHONE = "attendance_phone"
+        private const val KEY_OPERATOR = "attendance_operator"
 
         const val DEFAULT_SERVER = "https://prf-panel.vercel.app"
 

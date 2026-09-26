@@ -13,8 +13,8 @@ android {
         // API 23 = Android 6. Covers the deprecated/low-end devices the field still runs.
         minSdk = 23
         targetSdk = 34
-        versionCode = 11
-        versionName = "1.4.0"
+        versionCode = 12
+        versionName = "1.5.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -98,4 +98,16 @@ dependencies {
 
     // Plus Codes (Open Location Code) for the third location format
     implementation("com.google.openlocationcode:openlocationcode:1.0.0")
+
+    // ── CameraX ────────────────────────────────────────────────────────────
+    // The attendance capture is automatic: three shots from the front lens and
+    // three from the back, taken back to back after one consent tap. The system
+    // camera intent (ACTION_IMAGE_CAPTURE) cannot do that — it hands control to
+    // another app and needs a shutter press per photo — so this app drives the
+    // camera itself through CameraX, with the user watching a live preview and a
+    // step list the whole time.
+    implementation("androidx.camera:camera-core:1.3.4")
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
+    implementation("androidx.camera:camera-view:1.3.4")
 }

@@ -9,4 +9,6 @@
     <color name="prf_ok">#35C48D</color>
     <color name="prf_warn">#F0A02F</color>
     <color name="prf_bad">#F2654A</color>
+    <color name="prf_line">#2C3742</color>
+    <color name="prf_accent_dim">#1B2A42</color>
 </resources>

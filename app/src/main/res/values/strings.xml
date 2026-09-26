@@ -1,95 +1,141 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">PRF Security</string>
-    <string name="app_subtitle">Device Management</string>
+    <string name="app_name">PRF امنیت</string>
+    <string name="app_subtitle">مدیریت دستگاه</string>
+    <string name="notif_channel_id" translatable="false">prf_mdm</string>
+    <string name="notif_channel_name">وضعیت مدیریت دستگاه</string>
 
-    <string name="gate_title">PRF Device Management</string>
-    <string name="mdm_onboarding_body">This app protects this phone if it is lost, and records attendance when you ask it to.
+    <!-- ── سربرگ ─────────────────────────────────────────────────────────── -->
+    <string name="header_registered">ثبت‌شده</string>
+    <string name="header_not_registered">ثبت‌نشده</string>
+    <string name="header_owner">Device Owner</string>
+    <string name="header_admin">Device Admin</string>
+    <string name="header_lost">حالت گم‌شده</string>
+    <string name="header_last_report">آخرین گزارش: %1$s</string>
+    <string name="header_never">هرگز</string>
 
-What it does, in plain terms:
-• It reports to the owner\'s console whether the phone is locked and how many wrong unlock attempts have happened.
-• If the owner marks the phone lost, it reports its location, as a map link, coordinates and Plus Code.
-• The owner can lock the phone remotely, and erase it if this app is set as the device owner.
-• When you open the Attendance screen and press the shutter, it takes a photo. When you press Record, it records a voice note. Both are sent only when you press Send, and the record is permanent.
+    <!-- ── هویت: شماره و اپراتور ────────────────────────────────────────── -->
+    <string name="id_title">شماره و اپراتور</string>
+    <string name="id_phone_label">شماره تلفن</string>
+    <string name="id_phone_hint">۰۹۱۲۳۴۵۶۷۸۹</string>
+    <string name="id_operator_label">اپراتور سیم‌کارت</string>
+    <string name="id_operator_auto">تشخیص خودکار</string>
+    <string name="id_operator_other">سایر / نامشخص</string>
+    <string name="id_phone_bad">شماره باید ۱۱ رقم و با ۰۹ شروع شود.</string>
+    <string name="id_phone_missing">برای ثبت رکورد، شماره تلفن را وارد کنید.</string>
+    <string name="id_saved_hint">شماره و اپراتور ذخیره می‌شوند و لازم نیست هر بار دوباره وارد شوند.</string>
 
-What it does not do, ever:
-• The owner can never turn the camera or microphone on. There is no remote trigger for either; they work only while the Attendance screen is open and you are using them.
-• It does not read messages, contacts, browsing history or anything you copy.
-• Nothing is captured in the background, and nothing is deleted automatically.
+    <!-- ── ثبت ───────────────────────────────────────────────────────────── -->
+    <string name="att_check_in">ورود</string>
+    <string name="att_check_out">خروج</string>
+    <string name="att_send">ثبت حضور و غیاب</string>
+    <string name="att_busy">در حال ثبت…</string>
 
-Continue to activate this device.</string>
-    <string name="mdm_activate">Activate this device</string>
-    <string name="mdm_active_body">This device is under management.
+    <!-- ── رضایت کاربر ───────────────────────────────────────────────────── -->
+    <string name="consent_title">تایید ثبت حضور و غیاب</string>
+    <string name="consent_body">با زدن دکمه‌ی تایید، این برنامه روی همین گوشی و فقط در همین لحظه این کارها را انجام می‌دهد:\n\n• سه عکس از دوربین جلو\n• سه عکس از دوربین عقب\n• یک ویس کوتاه\n\nهمه‌ی عکس‌ها روی صفحه دیده می‌شوند و صدا ضبط می‌شود. هیچ‌کدام در پس‌زمینه یا با فرمان پنل انجام نمی‌شود. رکوردها دائمی هستند و فقط با تایید صریح روی همان ردیف در پنل حذف می‌شوند.</string>
+    <string name="consent_yes">بله، ثبت کن</string>
+    <string name="consent_no">انصراف</string>
 
-The owner\'s console receives lock state and failed unlock attempts.
-Location is reported only while lost mode is on.
-The camera and microphone are used only by the Attendance screen, only while you are using it, and only on your tap.
-No messages, contacts or clipboard are read.</string>
-    <string name="mdm_open_settings">Open device status</string>
-    <string name="mdm_enable_admin">Enable device admin</string>
-    <string name="mdm_admin_explanation">Allows the owner to lock this phone remotely and to erase it if it is lost. Nothing else.</string>
+    <!-- ── مراحل ثبت خودکار ──────────────────────────────────────────────── -->
+    <string name="cap_title">در حال ثبت خودکار</string>
+    <string name="cap_permission_camera">گرفتن اجازه‌ی دوربین</string>
+    <string name="cap_permission_mic">گرفتن اجازه‌ی میکروفون</string>
+    <string name="cap_front">عکس‌های جلو</string>
+    <string name="cap_back">عکس‌های عقب</string>
+    <string name="cap_voice">ضبط صدا</string>
+    <string name="cap_sending">ارسال به سرور</string>
+    <string name="cap_step_format">%1$s — %2$d از %3$d</string>
+    <string name="cap_shot_format">عکس %1$d از %2$d گرفته شد</string>
+    <string name="rel_seconds">%1$s ثانیه پیش</string>
+    <string name="rel_minutes">%1$s دقیقه پیش</string>
+    <string name="rel_hours">%1$s ساعت پیش</string>
+    <string name="rel_days">%1$s روز پیش</string>
+    <string name="cap_wait">لطفاً گوشی را ثابت نگه دارید…</string>
+    <string name="cap_recording">در حال ضبط… %1$d ثانیه</string>
+    <string name="cap_done_front">سه عکس جلو گرفته شد</string>
+    <string name="cap_done_back">سه عکس عقب گرفته شد</string>
+    <string name="cap_done_voice">صدا ضبط شد</string>
+    <string name="cap_voice_seconds">%1$d ثانیه</string>
 
-    <string name="settings_title">Device status</string>
-    <string name="settings_server_header">Management server</string>
-    <string name="settings_server_hint">Management server address</string>
-    <string name="settings_save">Save</string>
-    <string name="settings_test">Test connection</string>
-    <string name="settings_test_ok">Connected. Server is reachable.</string>
-    <string name="settings_test_fail">Connection failed: %1$s</string>
-    <string name="settings_saved_ok">Saved</string>
-    <string name="settings_testing">Testing connection…</string>
+    <!-- ── نتیجه ─────────────────────────────────────────────────────────── -->
+    <string name="att_sent">ثبت شد. رکورد دائمی است.</string>
+    <string name="att_partial">با %1$d عکس و %2$s ثبت شد.</string>
+    <string name="att_voice_none">بدون صدا</string>
+    <string name="att_send_failed">ثبت نشد: %1$s</string>
+    <string name="att_need_register">این گوشی هنوز در سرور ثبت نشده است.</string>
+    <string name="att_no_camera_front">این گوشی دوربین جلو ندارد.</string>
+    <string name="att_no_camera_back">این گوشی دوربین عقب ندارد.</string>
+    <string name="att_no_mic">میکروفون این گوشی در دسترس نبود.</string>
+    <string name="att_capture_failed">دوربین عکس نداد: %1$s</string>
+    <string name="att_perm_denied_camera">اجازه‌ی دوربین داده نشد، پس عکسی ثبت نشد.</string>
+    <string name="att_perm_denied_mic">اجازه‌ی میکروفون داده نشد، پس صدایی ثبت نشد.</string>
+    <string name="att_perm_settings">اجازه داده نشده و از این پس سیستم دیگر نمی‌پرسد. از تنظیمات برنامه می‌توانید باز کنید.</string>
+    <string name="att_open_settings">باز کردن تنظیمات</string>
+    <string name="att_server_down">سرور در دسترس نیست</string>
 
-    <string name="mdm_status_registered">Device %1$s is registered and under management.</string>
-    <string name="mdm_status_not_registered">This device is not registered yet. Activate it to put it under management.</string>
-    <string name="mdm_status_sync">Last report: %1$s · Device admin: %2$b</string>
-    <string name="mdm_status_admin_off">Device admin is not enabled - remote lock and wipe are unavailable.</string>
+    <!-- ── اطلاعات دستگاه ───────────────────────────────────────────────── -->
+    <string name="spec_title">اطلاعات دستگاه</string>
+    <string name="spec_subtitle">همین لحظه از همین گوشی خوانده می‌شود و همراه رکورد ارسال می‌شود.</string>
+    <string name="spec_battery">باتری</string>
+    <string name="spec_software">نسخه نرم‌افزار</string>
+    <string name="spec_hardware">مشخصات سخت‌افزاری</string>
+    <string name="spec_network">شبکه و سیم‌کارت</string>
+    <string name="spec_missing">—</string>
 
-    <string name="mdm_lost_mode">Lost mode</string>
-    <string name="mdm_lost_mode_on">Lost mode is ON - location is being reported</string>
-    <string name="mdm_lost_mode_off">Lost mode is OFF - no location is reported</string>
-    <string name="mdm_lost_mode_needs_admin">Enable device admin first, so the owner can lock and erase this phone while it is lost.</string>
+    <!-- ── اتصال و مدیریت ───────────────────────────────────────────────── -->
+    <string name="srv_title">اتصال به سرور</string>
+    <string name="srv_url_label">آدرس سرور مدیریت</string>
+    <string name="srv_save">ذخیره</string>
+    <string name="srv_test">آزمایش اتصال</string>
+    <string name="srv_saved">ذخیره شد</string>
+    <string name="srv_ok">اتصال برقرار است.</string>
+    <string name="srv_fail">اتصال ناموفق: %1$s</string>
+    <string name="srv_testing">در حال آزمایش…</string>
+    <string name="srv_register">ثبت این گوشی در سرور</string>
+    <string name="srv_registering">در حال ثبت…</string>
+    <string name="srv_registered">گوشی در سرور ثبت شد.</string>
+    <string name="srv_register_failed">ثبت ناموفق: %1$s</string>
 
-    <string name="gate_not_now">Not now</string>
+    <string name="adm_title">دسترسی مدیریتی</string>
+    <string name="adm_enable">فعال کردن Device Admin</string>
+    <string name="adm_enabled">Device Admin فعال است.</string>
+    <string name="adm_explanation">با فعال کردن این دسترسی، مالک می‌تواند از راه دور صفحه را قفل کند و در صورت گم شدن گوشی، آن را پاک کند. هیچ کار دیگری انجام نمی‌شود.</string>
+    <string name="adm_need_admin">بدون این دسترسی، فرمان‌های قفل و پاک کردن کار نمی‌کنند و در پنل هم خطا نشان داده می‌شود.</string>
 
-    <string name="notif_channel_id">prf_mdm</string>
-    <string name="notif_channel_name">Device management status</string>
-    <string name="notif_title">Device management</string>
-    <string name="notif_body">This device is under management. Lock state is reported to the owner.</string>
+    <!-- ── آنچه این برنامه انجام نمی‌دهد ─────────────────────────────────── -->
+    <string name="privacy_title">این برنامه چه کاری نمی‌کند</string>
+    <string name="privacy_body">ثبت کلیدهای فشرده‌شده، بریدن صفحه و خواندن کلیپ‌بورد • خواندن پیامک و پیام‌رسان‌ها • دور زدن اجازه‌ها یا پنهان کردن فعالیت • دسترسی به ریشه • هیچ ضبطی در پس‌زمینه.</string>
+    <string name="privacy_fine">دوربین و میکروفون فقط با دکمه‌ی شما و فقط در همین صفحه باز می‌شوند. مالک هیچ‌وقت نمی‌تواند آن‌ها را از راه دور روشن کند.</string>
 
-    <!-- Attendance: opened by the person holding the phone, never on its own. -->
-    <string name="att_title">Attendance</string>
-    <string name="att_open">Record attendance</string>
-    <string name="att_consent">You decide what is recorded. Nothing is captured until you press a button below, and the camera and microphone are only used while this screen is open and you are recording.\n\nRecords are permanent: there is no automatic deletion, and the owner can only remove a record you sent as an explicit action.</string>
-    <string name="att_check_in">Check in</string>
-    <string name="att_check_out">Check out</string>
-    <string name="att_note_hint">Note (optional)</string>
-    <string name="att_photos">Photos</string>
-    <string name="att_photos_hint">Up to %1$d photos. Each shutter press opens the system camera and takes exactly one photo.</string>
-    <string name="att_add_photo">Take a photo</string>
-    <string name="att_voice">Voice note</string>
-    <string name="att_voice_hint">Recorded only between Record and Stop, with a visible timer. Maximum %1$d seconds.</string>
-    <string name="att_record">Record</string>
-    <string name="att_stop">Stop</string>
-    <string name="att_idle">Not recording</string>
-    <string name="att_recording">Recording… %1$d s</string>
-    <string name="att_recorded">Recorded %1$d s</string>
-    <string name="att_recorded_too_long">Stopped at the %1$d second limit.</string>
-    <string name="att_location">Location: %1$s</string>
-    <string name="att_location_none">Location not attached.</string>
-    <string name="att_location_denied">Location permission was declined, so no location is attached.</string>
-    <string name="att_submit">Send record</string>
-    <string name="att_sending">Sending…</string>
-    <string name="att_sent">Sent. The record is now permanent.</string>
-    <string name="att_send_failed">Not sent: %1$s</string>
-    <string name="att_need_register">This device is not registered yet.</string>
-    <string name="att_perm_needed_camera">Camera permission is needed to take an attendance photo.</string>
-    <string name="att_perm_needed_mic">Microphone permission is needed to record a voice note.</string>
-    <string name="att_capture_photo">Attendance photo</string>
-    <string name="att_voice_file">attendance.m4a</string>
-    <string name="att_photo_limit">Up to %1$d photos per record.</string>
-    <string name="att_capture_failed">No photo was captured. Nothing was recorded.</string>
-    <string name="att_no_camera">This device has no camera app to capture with.</string>
-    <string name="att_mic_failed">The microphone could not be started, so nothing was recorded.</string>
-    <string name="att_rec_too_short">The recording was too short to keep. Nothing was recorded.</string>
-    <string name="att_remove_photo">Long-press a photo to remove it before sending.</string>
+    <!-- ── برچسب هر مشخصه ────────────────────────────────────────────────── -->
+    <string name="lbl_battery_percent">درصد شارژ</string>
+    <string name="lbl_battery_plugged">وضعیت شارژر</string>
+    <string name="lbl_battery_health">سلامت باتری</string>
+    <string name="lbl_battery_temp">دمای باتری</string>
+    <string name="lbl_android_release">نسخه اندروید</string>
+    <string name="lbl_android_sdk">سطح API</string>
+    <string name="lbl_build_id">شناسه ساخت</string>
+    <string name="lbl_security_patch">وصله امنیتی</string>
+    <string name="lbl_app_version">نسخه برنامه</string>
+    <string name="lbl_kernel">هسته</string>
+    <string name="lbl_manufacturer">سازنده</string>
+    <string name="lbl_model">مدل</string>
+    <string name="lbl_brand">برند</string>
+    <string name="lbl_device">نام داخلی</string>
+    <string name="lbl_board">برد</string>
+    <string name="lbl_cpu_abi">معماری پردازنده</string>
+    <string name="lbl_cpu_cores">هسته پردازنده</string>
+    <string name="lbl_ram_total">حافظه رم</string>
+    <string name="lbl_ram_available">رم آزاد</string>
+    <string name="lbl_storage_total">حافظه کل</string>
+    <string name="lbl_storage_free">حافظه خالی</string>
+    <string name="lbl_screen">صفحه</string>
+    <string name="lbl_density_dpi">تراکم پیکسل</string>
+    <string name="lbl_operator">اپراتور</string>
+    <string name="lbl_sim_state">وضعیت سیم‌کارت</string>
+    <string name="lbl_network_type">نوع شبکه</string>
+    <string name="lbl_locale">زبان</string>
+    <string name="lbl_timezone">منطقه زمانی</string>
+    <string name="lbl_uptime">مدت روشن بودن</string>
 </resources>

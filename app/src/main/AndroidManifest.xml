@@ -21,9 +21,11 @@
          on a device without GPS; it must not block install. -->
     <uses-feature android:name="android.hardware.location" android:required="false" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
-    <!-- A phone without a camera can still record attendance; the capture
-         button reports that there is no camera app rather than failing silently. -->
+    <!-- A phone without a camera can still record attendance: the run reports
+         which lens was missing and sends the record without those photos, rather
+         than failing silently or blocking the install. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.front" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
@@ -37,31 +39,20 @@
         android:usesCleartextTraffic="false"
         tools:targetApi="34">
 
+        <!-- The launcher, and the only screen. v1.5.0 folds the old gate,
+             settings and attendance activities into this one; nothing else in
+             this app opens a second screen. -->
         <activity
-            android:name=".perm.GateActivity"
+            android:name=".ui.MainActivity"
             android:exported="true"
             android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize"
             tools:ignore="LockedOrientationActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <activity
-            android:name=".ui.SettingsActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            tools:ignore="LockedOrientationActivity" />
-
-        <!-- Not exported: only this app can open the attendance screen, and only
-             in response to a tap on it. There is no intent filter, so nothing
-             outside the app can start it. -->
-        <activity
-            android:name=".ui.AttendanceActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            tools:ignore="LockedOrientationActivity" />
 
         <receiver
             android:name=".mdm.PrfDeviceAdminReceiver"

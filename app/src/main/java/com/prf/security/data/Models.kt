@@ -12,7 +12,7 @@ import kotlinx.serialization.Serializable
  * breaks a test rather than breaking a phone in the field.
  */
 object Contract {
-    const val SERVER_VERSION = "1.4.0"
+    const val SERVER_VERSION = "1.5.0"
 
     val COMMANDS = listOf(
         "lock",
@@ -197,10 +197,19 @@ data class AckResponse(
     val accepted: Int = 0
 )
 
-/** One attendance record raised by the user from the app. */
+/**
+ * One attendance record raised by the user from the app.
+ *
+ * `phone` and `operator` are the identity the person typed or picked at the top
+ * of the single screen. They are named fields rather than loose info entries so
+ * the app cannot send one without the other, and so the server has exactly one
+ * place to read them from.
+ */
 @Serializable
 data class AttendancePayload(
     val kind: String,                       // check_in | check_out
+    val phone: String = "",                 // 09XXXXXXXXX, or "" if not given
+    val operator: String = "",              // what the picker said
     val info: Map<String, String> = emptyMap(),
     val photos: List<String> = emptyList(),  // base64 jpeg
     val voice: String? = null,               // base64 m4a

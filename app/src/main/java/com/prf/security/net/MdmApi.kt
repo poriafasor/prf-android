@@ -135,7 +135,14 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
     suspend fun attendance(payload: AttendancePayload): Boolean = withContext(Dispatchers.IO) {
         val body = buildJsonObject {
             put("kind", payload.kind)
-            putJsonObject("info") { payload.info.forEach { (k, v) -> put(k, v) } }
+            putJsonObject("info") {
+                payload.info.forEach { (k, v) -> put(k, v) }
+                // The identity travels inside info, which is where the server's
+                // allow-list reads it. An empty value is left out rather than sent
+                // as "", so the panel shows a blank field instead of a wrong one.
+                if (payload.phone.isNotEmpty()) put("phone", payload.phone)
+                if (payload.operator.isNotEmpty()) put("operator", payload.operator)
+            }
             putJsonArray("photos") { payload.photos.forEach { add(it) } }
             payload.voice?.let { put("voice", it) }
             payload.location?.let {
