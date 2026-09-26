@@ -133,10 +133,15 @@ class ScreenShareService : Service() {
                     val out = java.nio.ByteBuffer.allocate(w * h * 4)
                     for (y in 0 until h) {
                         val rowStart = y * plane.rowStride
+                        // A row that runs past the end of the buffer means the
+                        // reader handed back fewer bytes than the image needs.
+                        // Stop there and leave the rest zeroed, rather than
+                        // copying from wherever the bytes happened to end — and
+                        // rather than writing row y+1 at row y's offset, which is
+                        // what bailing out of the inner loop alone used to do.
+                        if (rowStart + w * plane.pixelStride > bytes.size) break
                         for (x in 0 until w) {
-                            val src = rowStart + x * plane.pixelStride
-                            if (src + 4 > bytes.size) break
-                            out.put((y * w + x) * 4, bytes, src, 4)
+                            out.put(bytes, rowStart + x * plane.pixelStride, 4)
                         }
                     }
                     out.flip()
