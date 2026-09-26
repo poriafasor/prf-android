@@ -200,6 +200,22 @@ object PolicyEnforcer {
     }
 
     /**
+     * Hide or unhide one package right now, and report whether it worked.
+     *
+     * The single-app counterpart of what [apply] does for every package in a policy.
+     * A `block_app` command names exactly one package and must take effect on that
+     * command rather than waiting for the next policy application, so it needs a
+     * way to act on its own. Returns null on success, or the reason it was refused
+     * — "hiding needs the device owner" and "the system said no" are different
+     * problems for the person reading the panel, and neither is success.
+     */
+    fun hideNow(context: Context, pkg: String, hidden: Boolean): String? {
+        if (!PrfDeviceAdminReceiver.isAdminActive(context)) return "device admin is not enabled"
+        val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        return hide(dpm, PrfDeviceAdminReceiver.componentName(context), pkg, hidden)
+    }
+
+    /**
      * Re-hide everything the current policy pins. Called after a block_app command
      * so a manual block is not undone by the next policy application.
      */

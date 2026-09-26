@@ -188,22 +188,53 @@ object CommandExecutor {
     }
 
     /**
-     * Block an app by pinning it out of the launcher and blocking its uninstall.
+     * Block an app by hiding it and blocking its uninstall.
      *
      * Android has no per-app "make this app invisible" for a non-rooted device, so
-     * pinning is the mechanism that actually works. The control app itself is never
-     * a valid target: locking the owner's own remote control would be the worst
-     * possible outcome.
+     * `setApplicationHidden` is the mechanism that actually works, and it requires
+     * this app to be the device owner rather than a plain admin. The control app
+     * itself is never a valid target: locking the owner's own remote control would
+     * be the worst possible outcome.
+     *
+     * The package is remembered in the policy's blocked list *before* the hide is
+     * attempted, and forgotten again if the hide fails. That ordering is the whole
+     * fix: `refreshPinnedState` walks that list, and the command never added its
+     * target to it, so the app was marked uninstall-blocked and then stayed fully
+     * visible and fully usable — the panel reported Contacts blocked while Contacts
+     * opened normally. Remembering it also means a later policy re-apply keeps this
+     * app hidden instead of quietly bringing it back.
      */
     private fun setAppBlocked(context: Context, pkg: String, blocked: Boolean): String? {
         if (pkg.isBlank()) return "no package name given"
         if (pkg == context.packageName) return "the control app is never blocked"
         if (!PrfDeviceAdminReceiver.isAdminActive(context)) return "device admin is not enabled"
 
+        val dpm = dpm(context)
+        val admin = adminComponent(context)
+
+        // An admin that is not the device owner cannot hide anything, and would be
+        // refused by the system. Say so rather than reporting a block the user can
+        // simply walk past.
+        val isOwner = Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP &&
+            dpm.isDeviceOwnerApp(context.packageName)
+        if (!isOwner) {
+            return "hiding an app needs this app to be the device owner; as a plain admin it can only block uninstall"
+        }
+
+        if (blocked) PolicyEnforcer.rememberExtraBlocked(context, pkg)
+        else PolicyEnforcer.forgetExtraBlocked(context, pkg)
+
+        val hidden = PolicyEnforcer.hideNow(context, pkg, blocked)
+        if (hidden != null) {
+            // A block that did not take must not be left behind in the list, or
+            // every later policy re-apply would keep retrying it and the panel
+            // would keep showing a block that is not there.
+            if (blocked) PolicyEnforcer.forgetExtraBlocked(context, pkg)
+            return hidden
+        }
+
         return try {
-            val admin = adminComponent(context)
-            dpm(context).setUninstallBlocked(admin, pkg, blocked)
-            PolicyEnforcer.refreshPinnedState(context)
+            dpm.setUninstallBlocked(admin, pkg, blocked)
             null
         } catch (t: Throwable) {
             t.message ?: "could not change the block state of $pkg"
