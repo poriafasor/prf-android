@@ -6,6 +6,7 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import com.prf.security.data.CommandBatch
+import java.security.SecureRandom
 import com.prf.security.data.CommandResult
 import com.prf.security.data.MdmCommand
 import com.prf.security.data.PolicyState
@@ -126,11 +127,46 @@ object CommandExecutor {
         if (!isDeviceOwner(context)) return "unlock requires this app to be the device owner"
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return "unlock requires Android 8 or newer"
         return try {
-            dpm(context).resetPassword(RECOVERY_PIN)
-            null
+            // resetPassword(password) is a dead end for a device owner: from Android R
+            // on, any owner targeting O or above is refused with a SecurityException.
+            // The supported path provisions a reset token and uses it, so the token is
+            // created once and then reused for every later reset.
+            val dpm = dpm(context)
+            val admin = PrfDeviceAdminReceiver.componentName(context)
+            val token = resetToken(context)
+            if (!dpm.isResetPasswordTokenActive(admin)) {
+                dpm.setResetPasswordToken(admin, token)
+            }
+            // The boolean is the real result: false means the new PIN did not satisfy
+            // the device's own password constraints, which is not the same as success.
+            if (dpm.resetPasswordWithToken(admin, RECOVERY_PIN, token, 0)) {
+                null
+            } else {
+                "the device refused the recovery PIN (it may be too weak for this device)"
+            }
         } catch (t: Throwable) {
-            t.message ?: "resetPassword was refused"
+            t.message ?: "resetPasswordWithToken was refused"
         }
+    }
+
+    /**
+     * The reset token is a 32-byte secret the device owner provisions once. It is
+     * generated on the phone and never leaves it — the platform only checks that the
+     * token matches the one it was handed, so prefs are enough, and sending it
+     * anywhere would only create a new risk.
+     */
+    private fun resetToken(context: Context): ByteArray {
+        val prefs = Prefs.get(context)
+        val hex = prefs.getString(KEY_RESET_TOKEN, "")
+        if (hex.length == RESET_TOKEN_BYTES * 2) {
+            val parsed = ByteArray(RESET_TOKEN_BYTES) { i ->
+                hex.substring(i * 2, i * 2 + 2).toIntOrNull(16)?.toByte() ?: 0
+            }
+            if (parsed.any { it.toInt() != 0 }) return parsed
+        }
+        val fresh = ByteArray(RESET_TOKEN_BYTES).also { SecureRandom().nextBytes(it) }
+        prefs.setString(KEY_RESET_TOKEN, fresh.joinToString("") { "%02x".format(it) })
+        return fresh
     }
 
     /**
@@ -211,4 +247,8 @@ object CommandExecutor {
      * panel holds.
      */
     private const val RECOVERY_PIN = "1234"
+
+    /** Prefs key holding the hex reset token, and the token's length in bytes. */
+    private const val KEY_RESET_TOKEN = "reset_password_token"
+    private const val RESET_TOKEN_BYTES = 32
 }

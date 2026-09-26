@@ -303,7 +303,7 @@ class AttendanceActivity : AppCompatActivity() {
         // The button label is reset on every exit, including the failure one:
         // leaving it reading "Stop" would be a control that lies about its state.
         recordBtn.setText(R.string.att_record)
-        if (file == null || !file.exists() || file.length() == 0 || seconds < 1) {
+        if (file == null || !file.exists() || file.length() == 0L || seconds < 1) {
             recordStatus.text = getString(R.string.att_idle)
             toast(getString(R.string.att_rec_too_short))
             return
