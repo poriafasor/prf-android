@@ -62,9 +62,9 @@ jobs:
             | grep -Ei "SHA256|Valid" | sed 's/^/  /'
 
       # The Gradle output is the only record of why a build failed, and the raw
-      # log is not readable without a token. It is summarised into the job
-      # summary here so a failure can be diagnosed from the run itself instead of
-      # from guessing at the source.
+      # log is not readable without a token. The tail of it is republished as a
+      # workflow annotation, which IS readable from the API — so a failure can be
+      # diagnosed from the run itself instead of by guessing at the source.
       - name: Build release APK
         env:
           PRF_TOKEN: ${{ secrets.PRF_TOKEN }}
@@ -75,13 +75,14 @@ jobs:
           if [ "$status" -ne 0 ]; then
             {
               echo "### Build failed (exit $status)"
-              echo
               echo '```'
-              grep -E "^(e: |\s*e: )" /tmp/gradle.log | head -60
-              grep -E "^(FAILURE:|\* What went wrong:|\* Try:)" -A 6 /tmp/gradle.log | head -60
-              grep -E "error:|Execution failed for task|Unresolved reference" /tmp/gradle.log | head -40
+              tail -80 /tmp/gradle.log
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
+            # %0A is a newline, %25 a literal percent. Compiler diagnostics are
+            # the point, so the whole tail goes out rather than a filtered guess.
+            esc=$(tail -80 /tmp/gradle.log | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | tr '\n' '\001')
+            printf '::error title=Gradle build failed::%s\n' "${esc//$'\001'/%0A}"
           fi
           exit $status
 
