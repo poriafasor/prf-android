@@ -93,6 +93,25 @@ jobs:
                   || head -40 /tmp/gradle.log
               } | head -60
             }
+            # The diagnostic above names a resource and a source line that
+            # disagree with each other, and the text is flattened out of the
+            # *merged* values file rather than the source. So print the merged
+            # file around the reported line: that is the only place the real
+            # offending text exists, and it settles the question instead of
+            # leaving it to be guessed at from the source.
+            emit() {
+              local title="$1"; shift
+              local text; text=$(printf '%s\n' "$@" | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | tr '\n' '\001')
+              printf "::error title=%s::%s\n" "$title" "${text//$'\001'/%0A}"
+            }
+            merged=app/build/intermediates/incremental/release/mergeReleaseResources/merged.dir/values-en/values-en.xml
+            if [ -f "$merged" ]; then
+              emit "merged values-en, lines 158-175" "$(sed -n '158,175p' "$merged")"
+            else
+              emit "merged values-en not produced" \
+                "No merged.dir output exists, so the resource merge never wrote one."
+              find app/build/intermediates -name 'values-en.xml' 2>/dev/null | head -10
+            fi
             {
               echo "### Build failed (exit $status)"
               echo '```'
