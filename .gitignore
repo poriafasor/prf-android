@@ -9,3 +9,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# CI logs pulled down while diagnosing a build failure. They are large, they
+# are regenerated on demand from the run they came from, and one of them was
+# committed by accident — which is the reason to keep them out of the tree.
+*.zip
