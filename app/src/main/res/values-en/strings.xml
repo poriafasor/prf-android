@@ -166,7 +166,7 @@
     <string name="screen_title">Live screen</string>
     <string name="screen_explanation">Pressing this asks the phone itself for permission and the screen then appears in the admin panel. While it is on, a permanent notification stays in the status bar and tapping it turns sharing off. It never starts without your permission, and it cannot be switched on remotely.</string>
     <string name="screen_toggle">Show my screen in the panel</string>
-    <string name="screen_on">On — this phone's screen is visible in the panel.</string>
+    <string name="screen_on">On — this phone\'s screen is visible in the panel.</string>
     <string name="screen_off">Off.</string>
     <string name="screen_toggle_off">Stop showing my screen</string>
     <string name="screen_needs_android8">Screen sharing needs Android 8 or newer; reading a screen frame was added in Android 8.</string>

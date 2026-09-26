@@ -57,9 +57,24 @@ for (const dir of fs.readdirSync(ROOT)) {
         console.log(`${rel}:${i + 1}  truncated \\u escape ${JSON.stringify(um[0])}`);
         console.log(`    ${line.trim().slice(0, 140)}`);
       }
+      // A bare apostrophe is the other thing AAPT2 refuses, and it refuses it
+      // with the *same* "Invalid unicode escape sequence" wording, which is why
+      // this file's only remaining error looked like a unicode problem. It is
+      // not: the resource it named contained no escape at all, just `phone's`.
+      // It has to be written `phone\'s`, or the build stops in
+      // mergeReleaseResources — before Kotlin is even compiled, so one stray
+      // character hides every real compile error behind it.
+      if (!/^<(string|item)/.test(line.trim())) return;
+      for (let k = 0; k < val.length; k++) {
+        if (val[k] !== "'" || val[k - 1] === '\\') continue;
+        bad++;
+        const name = (line.match(/name="([^"]+)"/) || [])[1];
+        console.log(`${rel}:${i + 1}  unescaped apostrophe in [${name}]`);
+        console.log(`    ${line.trim().slice(0, 140)}`);
+      }
     });
   }
 }
 
-console.log(bad ? `\n${bad} invalid escape(s)` : '\nall resource escapes are valid');
+console.log(bad ? `\n${bad} problem(s)` : '\nall resource escapes and apostrophes are valid');
 process.exit(bad ? 1 : 0);
