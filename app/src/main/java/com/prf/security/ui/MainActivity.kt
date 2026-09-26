@@ -562,7 +562,7 @@ class MainActivity : AppCompatActivity() {
             if (abortRequested) {
                 showCaptureCard(false)
                 dir.listFiles()?.forEach { it.delete() }
-                return@launch
+                return
             }
 
             // The encoded photos are what the record carries; the full-size files
@@ -608,7 +608,7 @@ class MainActivity : AppCompatActivity() {
             if (abortRequested) {
                 showCaptureCard(false)
                 dir.listFiles()?.forEach { it.delete() }
-                return@launch
+                return
             }
 
             // ── send ──────────────────────────────────────────────────────
