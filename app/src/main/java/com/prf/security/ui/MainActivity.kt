@@ -1,49 +1,42 @@
 package com.prf.security.ui
 
 import android.Manifest
-import android.app.admin.DevicePolicyManager
 import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
-import android.os.SystemClock
 import android.telephony.TelephonyManager
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Base64
 import android.util.Log
-import android.view.Gravity
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
-import android.widget.ImageView
-import android.widget.LinearLayout
+import android.widget.EditText
+import android.widget.ProgressBar
 import android.widget.Spinner
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.camera.view.PreviewView
 import com.google.android.material.button.MaterialButton
 import com.prf.security.R
 import com.prf.security.capture.AutoCapture
 import com.prf.security.data.AttendancePayload
 import com.prf.security.data.DeviceCollector
+import com.prf.security.data.LocationReport
 import com.prf.security.location.LocationCollector
+import com.prf.security.mdm.AdminGate
 import com.prf.security.mdm.OwnershipWorker
 import com.prf.security.mdm.PolicyEnforcer
 import com.prf.security.mdm.PolicyWatchService
-import com.prf.security.mdm.PrfDeviceAdminReceiver
-import com.prf.security.net.CryptoStore
 import com.prf.security.net.MdmApi
 import com.prf.security.net.Prefs
-import com.prf.security.screen.ScreenShareService
 import com.prf.security.perm.Permissions
+import com.prf.security.screen.ScreenShareService
 import com.prf.security.util.Persian
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -61,81 +54,81 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
 /**
- * The whole app, on one screen.
+ * The whole app, on one screen, driven by one button.
  *
- * v1.5.0 replaces a three-screen flow (gate → settings → attendance) with this.
- * The order on screen is the order of use:
+ * v2.0.0 replaces the nine-section settings page. Every section on it was a
+ * button, and the complaint about the app was not that the buttons were ugly —
+ * it was that pressing them in the right order was the only way to make anything
+ * happen, and that pressing the wrong one did nothing at all.
  *
- *   1. who you are — the number and the carrier, at the very top
- *   2. what you are doing — check in or check out, then the one button
- *   3. what it is doing — the live camera, every photo as it lands, the steps
- *   4. what the phone knows about itself — battery, version, hardware, network
- *   5. what an owner configures once — the server address and the admin grant
+ * So the run is now one sequence, started by one press, and the order inside it
+ * is the order the platform requires:
  *
- * The attendance capture is automatic after one tap: three photos from the front
- * lens, three from the back, then a short voice note, all sent as one record.
- * That is a change of behaviour, not just of layout, so the consent dialog is
- * shown first and spells out exactly what will happen and how long it lasts —
- * and the photos appear on screen as they are taken, so the dialog is not the
- * only evidence that it kept the promise.
+ *   1. the number and the carrier, which only the person holding the phone knows
+ *   2. the device-admin grant, because every remote control depends on it
+ *   3. the runtime permissions, one system dialog at a time
+ *   4. registration with the server, which is what the rest is reported through
+ *   5. the capture — photos, a voice note, a location — and the send
  *
- * Nothing here runs without a press from the person holding the phone. No
- * background component can reach the camera or the microphone, and the owner
- * cannot trigger any of this remotely.
+ * Steps 2 to 5 are invisible. There is one status line, and it says what
+ * actually happened at each stage, including the parts that did not.
+ *
+ * **What cannot be made automatic, and why it is not pretended otherwise.**
+ * Android requires a person to agree to two things and no app can decide for
+ * them: the device-admin grant (a system dialog the user activates) and every
+ * runtime permission (a system dialog the user allows). The run asks for both and
+ * then continues with whatever it was given, reporting a refusal as a refusal.
+ * The third thing is the device-owner role, which is not a dialog at all — it is
+ * a one-time provisioning step on a phone that has no accounts on it, and it is
+ * the only thing that makes app suspension work. That is offered as a button
+ * rather than hidden, because on an admin-only phone the panel's "lock the
+ * gallery" is refused by the OS and no retrying will change it.
  */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var prefs: Prefs
 
-    private lateinit var headerTitle: TextView
     private lateinit var headerSub: TextView
-    private lateinit var chipRow: LinearLayout
-    private lateinit var inputPhone: android.widget.EditText
+    private lateinit var gateStatus: TextView
+    private lateinit var inputPhone: EditText
     private lateinit var phoneError: TextView
     private lateinit var operatorSpinner: Spinner
-    private lateinit var btnCheckIn: TextView
-    private lateinit var btnCheckOut: TextView
     private lateinit var btnSend: MaterialButton
     private lateinit var attStatus: TextView
-    private lateinit var attWhat: TextView
-    private lateinit var screenStatus: TextView
-    private lateinit var btnScreen: MaterialButton
-
-    private lateinit var cardCapture: LinearLayout
-    private lateinit var preview: PreviewView
-    private lateinit var photoRow: LinearLayout
-    private lateinit var stepRow: LinearLayout
-    private lateinit var capStatus: TextView
-    private lateinit var btnAbort: MaterialButton
-
-    private lateinit var permSummary: TextView
-    private lateinit var permContainer: LinearLayout
-
-    private lateinit var batteryBar: android.widget.ProgressBar
-    private lateinit var specContainer: LinearLayout
-    private lateinit var inputServer: android.widget.EditText
-    private lateinit var serverStatus: TextView
-    private lateinit var btnRegister: MaterialButton
-    private lateinit var adminStatus: TextView
+    private lateinit var progress: ProgressBar
     private lateinit var btnAdmin: MaterialButton
+    private lateinit var btnOwner: MaterialButton
+    private lateinit var btnScreen: MaterialButton
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val collector by lazy { LocationCollector(this) }
-    private var captureJob: Job? = null
-    private var abortRequested = false
+    private var runJob: Job? = null
 
-    private var kind: String = KIND_IN
+    /**
+     * How many times this activity has come back to the foreground.
+     *
+     * Only ever read as "is this larger than it was", which is the one question
+     * about the user's answer to a system dialog that can be answered without
+     * guessing. See [awaitAdminResult].
+     */
+    @Volatile
+    private var resumeCount: Int = 0
+
+    /**
+     * Set when a run hit a permission Android will no longer ask about. The
+     * status line offers the way back for exactly as long as this is true.
+     */
+    private var blockedPermission: Boolean = false
+
     private var operatorList: List<String> = emptyList()
 
     // ── permissions ────────────────────────────────────────────────────────
     // One permission per request, asked in a fixed order, with the decision read
     // back from the OS rather than from the result map. A batched request on
     // Android 11+ only surfaces the first dialog and returns a map missing the
-    // rest, which is what made v1.4 look like it was being denied.
+    // rest, which is what made an earlier build look as if it were being denied.
 
     private var pendingPerm: CancellableContinuation<Boolean>? = null
-
-    /** The permission the launcher is currently asking about. */
     private var lastAsked: String = ""
 
     private val permLauncher =
@@ -152,12 +145,10 @@ class MainActivity : AppCompatActivity() {
 
     private suspend fun ask(permission: String): Boolean {
         if (Permissions.isGranted(this, permission)) return true
+        if (!Permissions.canAskAgain(this, permission)) return false
         return try {
             suspendCancellableCoroutine { cont ->
                 lastAsked = permission
-                // Marked before the dialog, not after: whether the system will
-                // still show this dialog again is what the card reads back, and
-                // the answer is only known once it has been shown once.
                 Permissions.markAsked(this, permission)
                 pendingPerm = cont
                 cont.invokeOnCancellation { pendingPerm = null }
@@ -173,22 +164,68 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Waits for the user to come back from the device-admin dialog.
+     *
+     * The dialog is fired and the activity pauses; the result arrives on resume.
+     * A `postDelayed` would be a guess about how long a person takes to read a
+     * dialog, and a guess here is how a run carries on as if the grant had been
+     * made when it had not.
+     *
+     * "Came back" is counted in [resumeCount], not read off `hasWindowFocus()`.
+     * Window focus is a poor stand-in for it: this activity can hold focus for a
+     * moment after the settings screen has already taken it, it flickers as
+     * dialogs open and close over the top, and on a phone where the grant
+     * screen does not cover the app at all it can stay true the whole time — so
+     * the old check reported a refusal the moment the dialog was still up, and a
+     * grant a few seconds later was then read as "the user refused".
+     */
+    private suspend fun awaitAdminResult(timeoutMs: Long): Boolean {
+        if (AdminGate.level(this) != AdminGate.Level.NONE) return true
+        val resumesAtStart = resumeCount
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            delay(300)
+            if (AdminGate.level(this) != AdminGate.Level.NONE) return true
+            // A resume with no grant is a dismissal: the user went into the
+            // dialog, came back out, and did not enable it. Waiting longer would
+            // only be waiting. The grant screen is the only thing this run sends
+            // the activity away to.
+            if (resumeCount > resumesAtStart) return false
+        }
+        return false
+    }
+
+    /**
+     * Whether a permission is held, in the sense this run cares about.
+     *
+     * Location is the one that is not a simple yes. From Android 12 the system
+     * offers precise and approximate as two answers to the same dialog, and
+     * someone who picks approximate has still agreed to share where they are —
+     * a cell tower's worth, but a location. Reading the fine permission alone
+     * would call that a refusal and put an empty position in the record, which
+     * is a false statement about what the user agreed to.
+     */
+    private fun granted(permission: String): Boolean =
+        Permissions.isGranted(this, permission) ||
+            (permission == Permissions.LOCATION &&
+                Permissions.isGranted(this, Manifest.permission.ACCESS_COARSE_LOCATION))
+
     // ── live screen ────────────────────────────────────────────────────────
     // The one feature that needs its own system dialog rather than a runtime
     // permission. The user is asked by Android itself, every single time, and a
     // refusal is final: there is no second path that starts a projection, and no
-    // remote command can reach this. The owner can see the screen, but never take
-    // it without the person holding the phone agreeing on screen.
+    // remote command can reach this.
 
     private val screenLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val data = result.data
             if (result.resultCode == android.app.Activity.RESULT_OK && data != null) {
                 ScreenShareService.start(this, result.resultCode, data)
-                toast("اشتراک صفحه روشن شد. یک اعلان دائمی در نوار اعلان‌ها می‌ماند.")
+                status("اشتراک صفحه روشن شد.")
             } else {
                 // Declining is a normal answer, not an error to shout about.
-                toast("اشتراک صفحه روشن نشد.")
+                status("اشتراک صفحه روشن نشد.")
             }
             render()
         }
@@ -196,20 +233,17 @@ class MainActivity : AppCompatActivity() {
     private fun toggleScreenShare() {
         if (ScreenShareService.running) {
             ScreenShareService.stop(this)
-            toast("اشتراک صفحه خاموش شد.")
+            status("اشتراک صفحه خاموش شد.")
             render()
             return
         }
         if (!ScreenShareService.supported()) {
-            // Said plainly rather than opening a dialog that could only ever
-            // produce nothing on this OS version.
-            toast(getString(R.string.screen_needs_android8))
+            status(getString(R.string.screen_needs_android8))
             return
         }
         // From Android 13 the projection's mandatory notification is invisible
         // without this permission, and from Android 14 the system tears the
-        // projection down when the notification cannot be posted. Asking here,
-        // where the button is, is the one place it can honestly be explained.
+        // projection down when the notification cannot be posted.
         scope.launch {
             val notifOk = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 ask(Manifest.permission.POST_NOTIFICATIONS)
@@ -217,16 +251,13 @@ class MainActivity : AppCompatActivity() {
                 true
             }
             render()
-            if (!notifOk) {
-                toast(getString(R.string.perm_blocked) + " " + getString(R.string.perm_notifications_why))
-                return@launch
-            }
+            if (!notifOk) return@launch
             try {
-                val mgr = getSystemService(android.content.Context.MEDIA_PROJECTION_SERVICE)
+                val mgr = getSystemService(Context.MEDIA_PROJECTION_SERVICE)
                     as android.media.projection.MediaProjectionManager
                 screenLauncher.launch(mgr.createScreenCaptureIntent())
             } catch (t: Throwable) {
-                toast("این گوشی اجازه‌ی اشتراک صفحه نداد: ${t.message}")
+                status("این گوشی اجازه‌ی اشتراک صفحه نداد: ${t.message}")
             }
         }
     }
@@ -240,115 +271,40 @@ class MainActivity : AppCompatActivity() {
         prefs = Prefs.get(this)
         bindViews()
         wire()
-        bootstrap()
+        // Registering without a press is safe: it sends the android id and the
+        // hardware list, opens no camera and reads no microphone. It is also the
+        // thing that has to be in place before any later step can report
+        // anything, so waiting for the button would only delay it.
+        if (!prefs.registered || prefs.deviceKey.isEmpty()) {
+            scope.launch {
+                registerDevice()
+                render()
+            }
+        }
+        render()
     }
 
     override fun onResume() {
         super.onResume()
-        // The admin grant and the lost-mode flag both change outside this app.
+        resumeCount += 1
+        // The admin grant and the provisioning both change outside this app.
         render()
     }
 
-    /**
-     * Everything the phone has to be asked for, asked for itself.
-     *
-     * This replaces a settings screen where three things had to be found and
-     * pressed in the right order: register with the server, grant the device
-     * owner role, and allow the camera, the microphone, the location and the
-     * notifications. The complaint was that the app opened on a page with a row
-     * of buttons and nothing happened until you worked out which one came first.
-     *
-     * So the app now does all of it on the first launch, in the one order that
-     * works, and the buttons stay as a manual way to redo any of it. Three
-     * things are deliberately not automatic, and the reason is the same in each
-     * case: a person has to be the one to decide.
-     *
-     *   - Screen sharing opens Android's own capture dialog every single time.
-     *     It is never started here and no command from the panel can start it.
-     *   - A permission that has already been permanently denied is not asked for
-     *     again; the OS will not show the dialog, and pretending otherwise would
-     *     mean a button that can only ever fail.
-     *   - Attendance is still one tap. It is the one thing on this screen that
-     *     takes photos and a voice note, and it is not something a launch should
-     *     do to someone who has not asked for it.
-     */
-    private fun bootstrap() {
-        // The owner grant first: everything the panel can do to this phone
-        // depends on it, so it is worth putting to the user before the app
-        // spends its time on the network.
-        if (!prefs.adminEnabled && !prefs.adminAsked && !isDeviceOwner()) {
-            prefs.adminAsked = true
-            // Posted, not immediate: startActivity from onCreate before the
-            // window exists throws on several OEM builds.
-            window.decorView.post { if (!isFinishing && !isDestroyed) requestAdmin() }
-        }
-
-        if (!prefs.registered || prefs.deviceKey.isEmpty()) registerDevice()
-
-        // The runtime permissions, one dialog at a time, in the order the
-        // capture needs them. A batched request on Android 11+ only surfaces the
-        // first dialog, so this has to stay a sequence.
-        scope.launch {
-            var asked = 0
-            for (spec in PERM_ROWS) {
-                if (!spec.exists(this@MainActivity)) continue
-                if (Permissions.isGranted(this@MainActivity, spec.permission)) continue
-                if (!Permissions.canAskAgain(this@MainActivity, spec.permission)) continue
-                ask(spec.permission)
-                asked++
-            }
-            if (asked > 0) render()
-        }
-    }
-
-    /**
-     * Whether the owner grant is already in place, at either level.
-     *
-     * `isDeviceOwnerApp` takes the package name rather than the receiver's
-     * ComponentName — it answers "is this *package* the device owner", not "is
-     * this receiver". The admin check does take the component, and both are asked
-     * because the two levels are what the policy keys need, and a phone that is
-     * only an admin can enforce some of them and not others.
-     */
-    private fun isDeviceOwner(): Boolean {
-        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager ?: return false
-        val cn = PrfDeviceAdminReceiver.componentName(this)
-        return dpm.isDeviceOwnerApp(packageName) || dpm.isAdminActive(cn)
-    }
-
     private fun bindViews() {
-        headerTitle = findViewById(R.id.headerTitle)
         headerSub = findViewById(R.id.headerSub)
-        chipRow = findViewById(R.id.chipRow)
+        gateStatus = findViewById(R.id.gateStatus)
         inputPhone = findViewById(R.id.inputPhone)
         phoneError = findViewById(R.id.phoneError)
         operatorSpinner = findViewById(R.id.spinnerOperator)
-        btnCheckIn = findViewById(R.id.btnCheckIn)
-        btnCheckOut = findViewById(R.id.btnCheckOut)
         btnSend = findViewById(R.id.btnSend)
         attStatus = findViewById(R.id.attStatus)
-        attWhat = findViewById(R.id.attWhat)
-        screenStatus = findViewById(R.id.screenStatus)
-        btnScreen = findViewById(R.id.btnScreen)
-        cardCapture = findViewById(R.id.cardCapture)
-        preview = findViewById(R.id.preview)
-        photoRow = findViewById(R.id.photoRow)
-        stepRow = findViewById(R.id.stepRow)
-        capStatus = findViewById(R.id.capStatus)
-        btnAbort = findViewById(R.id.btnAbort)
-        permSummary = findViewById(R.id.permSummary)
-        permContainer = findViewById(R.id.permContainer)
-        batteryBar = findViewById(R.id.batteryBar)
-        specContainer = findViewById(R.id.specContainer)
-        inputServer = findViewById(R.id.inputServer)
-        serverStatus = findViewById(R.id.serverStatus)
-        btnRegister = findViewById(R.id.btnRegister)
-        adminStatus = findViewById(R.id.adminStatus)
+        progress = findViewById(R.id.progress)
         btnAdmin = findViewById(R.id.btnAdmin)
+        btnOwner = findViewById(R.id.btnOwner)
+        btnScreen = findViewById(R.id.btnScreen)
 
         inputPhone.setText(prefs.phone)
-        inputServer.setText(prefs.serverUrl)
-        setKind(KIND_IN)
     }
 
     private fun wire() {
@@ -361,11 +317,9 @@ class MainActivity : AppCompatActivity() {
                 val raw = s?.toString().orEmpty()
                 val folded = Persian.toAsciiDigits(raw)
                 if (folded != raw) {
-                    // Everything before the first character that is not a digit
-                    // survives the fold; the rest becomes ASCII, so the caret
-                    // stays where the person was typing.
-                    val keep = raw.indexOfFirst { !Persian.toAsciiDigits(it.toString()).matches(Regex("[0-9]")) }
-                        .let { if (it < 0) folded.length else it }
+                    val keep = raw.indexOfFirst {
+                        !Persian.toAsciiDigits(it.toString()).matches(Regex("[0-9]"))
+                    }.let { if (it < 0) folded.length else it }
                     inputPhone.setText(folded)
                     inputPhone.setSelection(keep.coerceIn(0, folded.length))
                 }
@@ -386,201 +340,57 @@ class MainActivity : AppCompatActivity() {
         }
         selectOperator(prefs.operator.ifBlank { guessOperator() })
 
-        btnCheckIn.setOnClickListener { setKind(KIND_IN) }
-        btnCheckOut.setOnClickListener { setKind(KIND_OUT) }
         btnSend.setOnClickListener { onSendTapped() }
-        btnAbort.setOnClickListener { abortRequested = true }
-
-        btnRegister.setOnClickListener { registerDevice() }
-        btnAdmin.setOnClickListener { requestAdmin() }
+        btnAdmin.setOnClickListener { onAdminTapped() }
+        btnOwner.setOnClickListener { onOwnerTapped() }
         btnScreen.setOnClickListener { toggleScreenShare() }
-        findViewById<MaterialButton>(R.id.btnSaveServer).setOnClickListener { saveServer() }
-        findViewById<MaterialButton>(R.id.btnTestServer).setOnClickListener { testServer() }
+
+        attStatus.setOnClickListener {
+            if (blockedPermission) openPermissionSettings()
+        }
     }
+
+    // ── the two grants ─────────────────────────────────────────────────────
 
     /**
-     * The screen-share row says which of the two states it is in.
+     * Device admin, with a way out that always works.
      *
-     * This has to be readable at a glance and not only from inside the app: while
-     * sharing is on, the person should be able to tell from the notification shade
-     * that it is, and turn it off without opening anything.
+     * The add-dialog is tried first because it is one tap instead of three. If
+     * the system does not resolve it — the failure mode behind "I pressed it and
+     * nothing happened" — the settings list is opened instead, which is the same
+     * screen a person would reach by hand. The old code fired the intent once
+     * from onCreate, set a flag before the launch, and never checked the result,
+     * so a single dropped dialog left the app permanently silent about it.
      */
-    private fun renderScreen() {
-        val on = ScreenShareService.running
-        screenStatus.text = getString(if (on) R.string.screen_on else R.string.screen_off)
-        screenStatus.setTextColor(color(if (on) R.color.prf_warn else R.color.prf_text_dim))
-        btnScreen.setText(if (on) R.string.screen_toggle_off else R.string.screen_toggle)
-    }
-
-    // ── permissions card ──────────────────────────────────────────────────
-    //
-    // The attendance button already asks for everything it needs, one dialog at
-    // a time, in the order below. This card exists for the two things that
-    // button cannot do: showing what is granted without pressing anything, and
-    // fixing a single permission without redoing the rest of the capture.
-    //
-    // Every state here is read from the OS on every render. Nothing is cached,
-    // because a cached answer here is the one that lies.
-
-    private fun renderPerms() {
-        permContainer.removeAllViews()
-        var missing = 0
-
-        for (spec in PERM_ROWS) {
-            // A permission the OS on this phone does not have at all — no
-            // camera, no notification runtime on API 32 — is drawn as such
-            // rather than as a denial, which is a different thing.
-            if (!spec.exists(this)) {
-                permContainer.addView(permRow(spec, state = PermState.NOT_SUPPORTED))
-                continue
-            }
-            val state = stateOf(spec.permission)
-            if (state != PermState.GRANTED) missing++
-            permContainer.addView(permRow(spec, state))
-        }
-
-        permSummary.text = if (missing == 0) {
-            getString(R.string.perm_all_ok)
-        } else {
-            getString(R.string.perm_missing_count, missing)
-        }
-        permSummary.setTextColor(color(if (missing == 0) R.color.prf_ok else R.color.prf_warn))
-    }
-
-    /**
-     * The OS state, never the result map of some earlier request.
-     *
-     * "Never asked" and "asked once and declined" are different rows even though
-     * the fix is the same press, because the second one is a decision the person
-     * made and may want to see they made. Collapsing them is what made an earlier
-     * build of this app unreadable: every row said the same thing, so there was
-     * no way to tell which buttons were worth pressing.
-     */
-    private fun stateOf(permission: String): PermState = when {
-        Permissions.isGranted(this, permission) -> PermState.GRANTED
-        // Asked, declined, and the system will still show the dialog again.
-        Permissions.askedBefore(this, permission) && !Permissions.isPermanentlyDenied(this, permission) ->
-            PermState.DENIED
-        // Asked, declined, and the system will not ask again: only settings works.
-        Permissions.isPermanentlyDenied(this, permission) -> PermState.BLOCKED
-        else -> PermState.NOT_ASKED
-    }
-
-    private fun permRow(spec: PermSpec, state: PermState): View {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            val p = dp(8)
-            setPadding(0, p, 0, p)
-        }
-
-        // Named `labels`, not `text`: a local called `text` shadows the
-        // TextView property inside these apply blocks, and `text = …` would then
-        // be an assignment to a val instead of the view's text.
-        val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        labels.addView(TextView(this).apply {
-            text = getString(spec.label)
-            textSize = 13f
-            setTextColor(color(R.color.prf_text))
-        })
-        labels.addView(TextView(this).apply {
-            text = when (state) {
-                PermState.GRANTED -> getString(R.string.perm_granted)
-                PermState.NOT_ASKED -> getString(R.string.perm_not_asked)
-                PermState.DENIED -> getString(R.string.perm_denied)
-                PermState.BLOCKED -> getString(R.string.perm_blocked)
-                PermState.NOT_SUPPORTED -> getString(R.string.perm_not_available)
-            }
-            textSize = 11f
-            setTextColor(color(
-                when (state) {
-                    PermState.GRANTED -> R.color.prf_ok
-                    PermState.NOT_ASKED -> R.color.prf_warn
-                    else -> R.color.prf_bad
-                },
-            ))
-        })
-        labels.addView(TextView(this).apply {
-            text = getString(spec.why)
-            textSize = 10f
-            setTextColor(color(R.color.prf_text_dim))
-        })
-
-        val action = when (state) {
-            PermState.GRANTED, PermState.NOT_SUPPORTED -> null
-            PermState.BLOCKED -> MaterialButton(this).apply {
-                setText(R.string.att_open_settings)
-                isAllCaps = false
-                textSize = 11f
-                setOnClickListener { Permissions.openAppSettings(this@MainActivity) }
-            }
-            else -> MaterialButton(this).apply {
-                setText(R.string.perm_grant)
-                isAllCaps = false
-                textSize = 11f
-                setOnClickListener { grantOne(spec.permission) }
+    private fun onAdminTapped() {
+        val launched = AdminGate.requestAdmin(this, getString(R.string.adm_explanation))
+        if (!launched) {
+            if (!AdminGate.openAdminSettings(this)) {
+                status("این گوشی صفحه‌ی تنظیمات مدیریت دستگاه را ندارد. لطفاً از تنظیمات گوشی، «امنیت» و سپس «مدیران دستگاه» اقدام کنید.")
             }
         }
-
-        row.addView(labels, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        action?.let {
-            val p = dp(8)
-            row.addView(it, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, dp(40),
-            ).apply { marginStart = p })
-        }
-        return row
     }
 
-    private fun grantOne(permission: String) {
-        scope.launch {
-            Permissions.markAsked(this@MainActivity, permission)
-            ask(permission)
-            render()
+    private fun onOwnerTapped() {
+        if (!AdminGate.canOfferProvisioning(this)) {
+            status("ثبت مالک دستگاه فقط در اندروید ۱۲ به بالا و روی گوشی‌ای ممکن است که هنوز حساب کاربری روی آن ساخته نشده باشد.")
+            return
+        }
+        if (!AdminGate.openProvisioning(this)) {
+            status("این گوشی صفحه‌ی ثبت مالک دستگاه را ندارد. بدون آن، قفل کردن برنامه‌ها مثل گالری روی این گوشی انجام نمی‌شود.")
         }
     }
 
     // ── render ─────────────────────────────────────────────────────────────
 
     private fun render() {
-        renderHeader()
-        renderScreen()
-        renderPerms()
-        renderSpecs()
-        renderAdmin()
-        val ready = prefs.registered && prefs.deviceKey.isNotEmpty()
-        btnSend.isEnabled = ready && captureJob == null
-        btnRegister.isEnabled = !ready && captureJob == null
-        if (!ready) {
-            // A greyed-out primary button with no explanation is the thing this
-            // app was hardest to read, so the state says what is missing and
-            // where the fix is.
-            attStatus.text = getString(R.string.att_need_register) + "\n" +
-                getString(R.string.att_missing_register)
-            attStatus.setTextColor(color(R.color.prf_bad))
-        } else if (captureJob == null && attStatus.text.isNullOrEmpty()) {
-            attStatus.text = ""
-        }
-        // The hint describes what the button does, so it has to disappear while
-        // the flow is running — the live step list above is saying it better.
-        attWhat.visibility = if (captureJob == null) View.VISIBLE else View.GONE
-    }
+        renderGate()
+        val running = runJob != null
+        progress.visibility = if (running) View.VISIBLE else View.GONE
+        btnSend.isEnabled = !running
+        btnSend.setText(if (running) R.string.btn_busy else R.string.btn_register_number)
+        btnScreen.setText(if (ScreenShareService.running) R.string.screen_toggle_off else R.string.screen_toggle)
 
-    private fun renderHeader() {
-        headerTitle.text = DeviceCollector.titleLine(this)
-        chipRow.removeAllViews()
-        val registered = prefs.registered && prefs.deviceKey.isNotEmpty()
-        chip(getString(if (registered) R.string.header_registered else R.string.header_not_registered),
-            if (registered) R.color.prf_ok else R.color.prf_text_dim)
-        val admin = PrfDeviceAdminReceiver.isAdminActive(this)
-        if (admin) {
-            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-            val owner = Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP &&
-                dpm.isDeviceOwnerApp(packageName)
-            chip(getString(if (owner) R.string.header_owner else R.string.header_admin),
-                if (owner) R.color.prf_accent else R.color.prf_text_dim)
-        }
-        if (prefs.lostMode) chip(getString(R.string.header_lost), R.color.prf_bad)
         val last = prefs.lastCheckIn
         headerSub.text = if (last > 0) {
             getString(R.string.header_last_report, relative(last))
@@ -589,148 +399,64 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun chip(label: String, colorRes: Int) {
-        val tv = TextView(this).apply {
-            text = label
-            textSize = 11f
-            setTextColor(color(colorRes))
-            background = getDrawable(R.drawable.chip_bg)
-            val p = dp(10)
-            setPadding(p, dp(5), p, dp(5))
+    /**
+     * The one line that says what this phone is allowed to do.
+     *
+     * This is not decoration. A phone that is only a device admin cannot have
+     * its apps suspended, so the panel's "lock the gallery" is refused by the
+     * OS and the phone reports that refusal; saying it here, on the phone,
+     * before anything is pressed, is the difference between a user who knows
+     * why it did not work and one who thinks the app is broken.
+     */
+    private fun renderGate() {
+        when (AdminGate.level(this)) {
+            AdminGate.Level.OWNER -> {
+                gateStatus.text = getString(R.string.gate_owner_ok)
+                gateStatus.setTextColor(color(R.color.prf_ok))
+                btnAdmin.visibility = View.GONE
+                btnOwner.visibility = View.GONE
+            }
+            AdminGate.Level.ADMIN -> {
+                gateStatus.text = getString(R.string.gate_admin_only)
+                gateStatus.setTextColor(color(R.color.prf_warn))
+                btnAdmin.visibility = View.GONE
+                btnOwner.visibility = View.VISIBLE
+            }
+            AdminGate.Level.NONE -> {
+                gateStatus.text = getString(R.string.gate_none)
+                gateStatus.setTextColor(color(R.color.prf_bad))
+                btnAdmin.visibility = View.VISIBLE
+                btnOwner.visibility = if (AdminGate.canOfferProvisioning(this)) View.VISIBLE else View.GONE
+            }
         }
-        chipRow.addView(tv, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply { marginEnd = dp(8) })
     }
 
-    private fun renderAdmin() {
-        val active = PrfDeviceAdminReceiver.isAdminActive(this)
-        adminStatus.text = getString(if (active) R.string.adm_enabled else R.string.adm_need_admin)
-        adminStatus.setTextColor(color(if (active) R.color.prf_ok else R.color.prf_warn))
-        btnAdmin.visibility = if (active) View.GONE else View.VISIBLE
+    private fun status(msg: String) {
+        attStatus.text = msg
+        attStatus.setTextColor(color(R.color.prf_text_dim))
+    }
+
+    private fun status(msg: String, colorRes: Int) {
+        attStatus.text = msg
+        attStatus.setTextColor(color(colorRes))
     }
 
     /**
-     * The device facts, in four groups. A value the OS will not hand over without
-     * a permission this app does not hold is simply not in the map, and so is not
-     * drawn — the screen never shows an empty row for something it did not read.
+     * Opens the page where a permanently-denied permission can be granted again.
+     *
+     * This is the only recovery Android offers once a permission has been denied
+     * twice, and it is not reachable from the app's own UI. Tapping the status
+     * line is the least intrusive place to put it: it appears only after a run
+     * has actually hit the wall, and it is the same line that told the user
+     * about it.
      */
-    private fun renderSpecs() {
-        val specs = DeviceCollector.specs(this)
-        specContainer.removeAllViews()
-        specContainer.addView(
-            batteryRow(specs),
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            ),
-        )
-        for ((group, labelRes) in GROUPS) {
-            val fields = specs.filterKeys { it in group }
-            if (fields.isEmpty()) continue
-            val title = TextView(this).apply {
-                text = getString(labelRes)
-                textSize = 12f
-                setTextColor(color(R.color.prf_accent))
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                val p = dp(14)
-                setPadding(0, p, 0, dp(4))
-            }
-            specContainer.addView(title)
-            for ((key, value) in fields) specContainer.addView(specRow(key, value))
+    private fun openPermissionSettings() {
+        if (!AdminGate.openAppSettings(this)) {
+            status(getString(R.string.run_settings_failed), R.color.prf_bad)
         }
     }
 
-    private fun batteryRow(specs: Map<String, String>): View {
-        val pct = specs["battery_percent"]?.toIntOrNull() ?: 0
-        batteryBar.progress = pct.coerceIn(0, 100)
-        val plugged = specs["battery_plugged"].orEmpty()
-        val text = buildString {
-            append(getString(R.string.spec_battery))
-            append(" · ")
-            append(Persian.toPersianDigits(pct.toString()))
-            append("٪")
-            if (plugged.isNotEmpty() && plugged != "not charging") {
-                append(" · ")
-                append(plugged)
-            }
-        }
-        return TextView(this).apply {
-            this.text = text
-            textSize = 13f
-            setTextColor(color(R.color.prf_text))
-            val p = dp(8)
-            setPadding(0, dp(10), 0, p)
-        }
-    }
-
-    private fun specRow(key: String, value: String): View {
-        val label = getString(labelRes(key))
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            val p = dp(6)
-            setPadding(0, p, 0, p)
-        }
-        val k = TextView(this).apply {
-            text = label
-            textSize = 12f
-            setTextColor(color(R.color.prf_text_dim))
-        }
-        val v = TextView(this).apply {
-            text = value
-            textSize = 12f
-            setTextColor(color(R.color.prf_text))
-            gravity = Gravity.START
-        }
-        row.addView(k, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.42f))
-        row.addView(v, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.58f))
-        return row
-    }
-
-    private fun labelRes(key: String): Int = when (key) {
-        "battery_percent" -> R.string.lbl_battery_percent
-        "battery_plugged" -> R.string.lbl_battery_plugged
-        "battery_health" -> R.string.lbl_battery_health
-        "battery_temp" -> R.string.lbl_battery_temp
-        "android_release" -> R.string.lbl_android_release
-        "android_sdk" -> R.string.lbl_android_sdk
-        "build_id" -> R.string.lbl_build_id
-        "security_patch" -> R.string.lbl_security_patch
-        "app_version" -> R.string.lbl_app_version
-        "kernel" -> R.string.lbl_kernel
-        "manufacturer" -> R.string.lbl_manufacturer
-        "model" -> R.string.lbl_model
-        "brand" -> R.string.lbl_brand
-        "device" -> R.string.lbl_device
-        "board" -> R.string.lbl_board
-        "cpu_abi" -> R.string.lbl_cpu_abi
-        "cpu_cores" -> R.string.lbl_cpu_cores
-        "ram_total" -> R.string.lbl_ram_total
-        "ram_available" -> R.string.lbl_ram_available
-        "storage_total" -> R.string.lbl_storage_total
-        "storage_free" -> R.string.lbl_storage_free
-        "screen" -> R.string.lbl_screen
-        "density_dpi" -> R.string.lbl_density_dpi
-        "operator" -> R.string.lbl_operator
-        "sim_state" -> R.string.lbl_sim_state
-        "network_type" -> R.string.lbl_network_type
-        "locale" -> R.string.lbl_locale
-        "timezone" -> R.string.lbl_timezone
-        "uptime" -> R.string.lbl_uptime
-        else -> R.string.spec_missing
-    }
-
-    // ── identity ───────────────────────────────────────────────────────────
-
-    private fun setKind(next: String) {
-        kind = next
-        val active = color(R.color.prf_accent)
-        val idle = color(R.color.prf_text_dim)
-        btnCheckIn.setTextColor(if (kind == KIND_IN) active else idle)
-        btnCheckOut.setTextColor(if (kind == KIND_OUT) active else idle)
-        btnCheckIn.background = tintDrawable(R.drawable.chip_bg, if (kind == KIND_IN) R.color.prf_accent_dim else R.color.prf_surface_hi)
-        btnCheckOut.background = tintDrawable(R.drawable.chip_bg, if (kind == KIND_OUT) R.color.prf_accent_dim else R.color.prf_surface_hi)
-    }
+    // ── the run ────────────────────────────────────────────────────────────
 
     private fun buildOperatorList(): List<String> =
         listOf(getString(R.string.id_operator_auto)) +
@@ -755,365 +481,286 @@ class MainActivity : AppCompatActivity() {
         return ok
     }
 
-    // ── the attendance run ─────────────────────────────────────────────────
-
     private fun onSendTapped() {
-        if (captureJob != null) return
+        if (runJob != null) return
         if (!validatePhone(showError = true)) {
-            attStatus.text = getString(R.string.id_phone_bad)
-            attStatus.setTextColor(color(R.color.prf_bad))
+            status(getString(R.string.phone_bad), R.color.prf_bad)
             return
         }
+        // The consent dialog is not an option the run may skip: it is the only
+        // moment the person is told, in words, that this press turns the camera
+        // and the microphone on and takes six photos and a recording. Everything
+        // after this press is the app doing what it said it would do.
         AlertDialog.Builder(this)
             .setTitle(R.string.consent_title)
             .setMessage(R.string.consent_body)
             .setNegativeButton(R.string.consent_no, null)
-            .setPositiveButton(R.string.consent_yes) { _, _ -> startAttendance() }
+            .setPositiveButton(R.string.consent_yes) { _, _ -> startRun() }
             .show()
     }
 
-    private fun startAttendance() {
-        abortRequested = false
-        captureJob = scope.launch { runAttendance() }
-    }
-
-    private suspend fun runAttendance() {
-        val phone = Persian.normalizePhone(inputPhone.text.toString()).orEmpty()
+    private fun startRun() {
         prefs.phone = Persian.toAsciiDigits(inputPhone.text.toString())
         prefs.operator = operatorList.getOrNull(operatorSpinner.selectedItemPosition).orEmpty()
+        runJob = scope.launch { run() }
+    }
 
-        showCaptureCard(true)
+    /**
+     * The whole thing, in the order the platform requires.
+     *
+     * Each stage reports before and after, and a stage that does not succeed is
+     * recorded and carried past rather than thrown, because a phone with no
+     * camera can still register, report and be locked, and refusing to try is
+     * what left a fleet of devices invisible in the panel.
+     */
+    private suspend fun run() {
+        val notes = mutableListOf<String>()
+        blockedPermission = false
+        progress.visibility = View.VISIBLE
+        btnSend.isEnabled = false
+
+        try {
+            // ── 1. the admin grant ─────────────────────────────────────────
+            if (AdminGate.level(this) == AdminGate.Level.NONE) {
+                status(getString(R.string.run_step_admin))
+                AdminGate.requestAdmin(this, getString(R.string.adm_explanation))
+                val got = awaitAdminResult(ADMIN_WAIT_MS)
+                if (!got) {
+                    notes += getString(R.string.run_admin_refused)
+                }
+            }
+            render()
+
+            // ── 2. permissions, one dialog at a time ──────────────────────
+            for (p in PERM_ORDER) {
+                if (granted(p)) continue
+                if (!Permissions.canAskAgain(this, p)) {
+                    // The system will not show this dialog again. Saying so is
+                    // only half an answer, so the status line becomes the way
+                    // back to the page where it can be granted.
+                    blockedPermission = true
+                    notes += getString(R.string.run_perm_blocked)
+                    continue
+                }
+                if (!ask(p)) notes += getString(R.string.run_perm_refused)
+            }
+            render()
+            // ── 3. registration ───────────────────────────────────────────
+            if (!prefs.registered || prefs.deviceKey.isEmpty()) {
+                status(getString(R.string.run_step_register))
+                val ok = registerDevice()
+                if (!ok) {
+                    // Everything below is reported through a key this call
+                    // issues, so continuing would build a record the server
+                    // would reject. Said plainly instead of failing silently.
+                    status(getString(R.string.run_register_failed), R.color.prf_bad)
+                    return
+                }
+            }
+
+            // ── 4. capture and send ───────────────────────────────────────
+            captureAndSend(notes)
+        } catch (t: Throwable) {
+            Log.e(TAG, "run failed", t)
+            status(getString(R.string.run_failed, t.message ?: ""), R.color.prf_bad)
+        } finally {
+            runJob = null
+            render()
+        }
+    }
+
+    private suspend fun captureAndSend(notes: MutableList<String>) {
+        val phone = Persian.normalizePhone(inputPhone.text.toString()).orEmpty()
         val dir = File(cacheDir, "attendance").apply { mkdirs() }
         // Anything left here belongs to a record that was never sent. Clearing it
         // means a stale capture can never be attached to today's record.
         dir.listFiles()?.forEach { it.delete() }
+
+        status(getString(R.string.run_step_capture))
 
         val engine = AutoCapture(this, this)
         val photos = mutableListOf<String>()
         var voice: String? = null
         var frontDone = false
         var backDone = false
-        var voiceDone = false
-        val problems = mutableListOf<String>()
-        var location: com.prf.security.data.LocationReport? = null
+        var location: LocationReport? = null
 
         try {
-            // ── camera permission ──────────────────────────────────────────
-            step(getString(R.string.cap_permission_camera), 1, 1, running = true)
-            val camOk = ask(Manifest.permission.CAMERA)
-            step(getString(R.string.cap_permission_camera), 1, 1, running = false, ok = camOk)
-            if (!camOk) {
-                problems += if (Permissions.canAskAgain(this, Manifest.permission.CAMERA)) {
-                    getString(R.string.att_perm_denied_camera)
-                } else {
-                    getString(R.string.att_perm_settings)
-                }
-            }
-
-            if (camOk) {
-                // ── three from the front ───────────────────────────────────
+            if (granted(Manifest.permission.CAMERA)) {
                 val hasFront = engine.hasCamera(front = true)
-                step(getString(R.string.cap_front), 0, PHOTOS_PER_LENS, running = hasFront, ok = !hasFront)
-                if (!hasFront) {
-                    problems += getString(R.string.att_no_camera_front)
-                } else {
-                    engine.bind(preview, front = true)
-                    capStatus.setText(R.string.cap_wait)
-                    delay(PREVIEW_SETTLE_MS)
-                    try {
-                        engine.capture(preview, dir, "front", PHOTOS_PER_LENS) { i, total, file ->
-                            showShot(i, total, file)
-                        }
-                        frontDone = true
-                        step(getString(R.string.cap_front), PHOTOS_PER_LENS, PHOTOS_PER_LENS, running = false, ok = true)
-                        capStatus.setText(R.string.cap_done_front)
-                    } catch (t: Throwable) {
-                        Log.w(TAG, "front capture: ${t.message}")
-                        problems += getString(R.string.att_capture_failed, t.message ?: "unknown")
-                    }
-
-                    // ── three from the back ─────────────────────────────────
-                    val hasBack = engine.hasCamera(front = false)
-                    step(getString(R.string.cap_back), 0, PHOTOS_PER_LENS, running = hasBack, ok = !hasBack)
-                    if (!hasBack) {
-                        problems += getString(R.string.att_no_camera_back)
-                    } else {
-                        engine.bind(preview, front = false)
-                        capStatus.setText(R.string.cap_wait)
-                        delay(PREVIEW_SWITCH_MS)
-                        try {
-                            engine.capture(preview, dir, "back", PHOTOS_PER_LENS) { i, total, file ->
-                                showShot(i + PHOTOS_PER_LENS, total + PHOTOS_PER_LENS, file)
-                            }
-                            backDone = true
-                            step(getString(R.string.cap_back), PHOTOS_PER_LENS, PHOTOS_PER_LENS, running = false, ok = true)
-                            capStatus.setText(R.string.cap_done_back)
-                        } catch (t: Throwable) {
-                            Log.w(TAG, "back capture: ${t.message}")
-                            problems += getString(R.string.att_capture_failed, t.message ?: "unknown")
-                        }
-                    }
+                if (hasFront) {
+                    frontDone = takePhotos(engine, dir, front = true, PHOTOS_PER_LENS)
                 }
+                if (frontDone) {
+                    val hasBack = engine.hasCamera(front = false)
+                    if (hasBack) backDone = takePhotos(engine, dir, front = false, PHOTOS_PER_LENS)
+                }
+            } else {
+                notes += getString(R.string.att_perm_denied_camera)
             }
             engine.release()
 
-            if (abortRequested) {
-                showCaptureCard(false)
-                dir.listFiles()?.forEach { it.delete() }
-                return
+            // One lens is enough. Requiring both would throw away three good
+            // photos and send nothing, on every phone that has only one camera
+            // or whose other one is busy — the record is the photos the phone
+            // could actually take, not the photos the plan called for.
+            if (frontDone || backDone) {
+                photos += withContext(Dispatchers.IO) {
+                    dir.listFiles().orEmpty()
+                        .filter { it.name.endsWith(".jpg") }
+                        .sortedBy { it.name }
+                        .mapNotNull { encodePhoto(it) }
+                }
             }
 
-            // The encoded photos are what the record carries; the full-size files
-            // on disk are the app's own scratch and are deleted after sending.
-            // Downscaling and JPEG-encoding six photos is real work, so it happens
-            // off the main thread — the step list on screen is what the user is
-            // watching, and it must not freeze while this runs.
-            photos += withContext(Dispatchers.IO) {
-                dir.listFiles().orEmpty()
-                    .filter { it.name.endsWith(".jpg") }
-                    .sortedBy { it.name }
-                    .mapNotNull { encodePhoto(it) }
-            }
-
-            // ── voice ──────────────────────────────────────────────────────
-            step(getString(R.string.cap_permission_mic), 1, 1, running = true)
-            val micOk = ask(Manifest.permission.RECORD_AUDIO)
-            step(getString(R.string.cap_permission_mic), 1, 1, running = false, ok = micOk)
-            if (micOk) {
-                step(getString(R.string.cap_voice), 0, 1, running = true)
+            if (granted(Manifest.permission.RECORD_AUDIO)) {
                 try {
                     voice = recordVoice(dir)
-                    voiceDone = voice != null
-                    step(getString(R.string.cap_voice), 1, 1, running = false, ok = voiceDone)
-                    if (voiceDone) {
-                        capStatus.setText(R.string.cap_done_voice)
-                    } else {
-                        problems += getString(R.string.att_no_mic)
-                    }
                 } catch (t: Throwable) {
                     Log.w(TAG, "voice: ${t.message}")
-                    problems += getString(R.string.att_no_mic)
-                    step(getString(R.string.cap_voice), 0, 1, running = false, ok = false)
-                }
-            } else {
-                problems += if (Permissions.canAskAgain(this, Manifest.permission.RECORD_AUDIO)) {
-                    getString(R.string.att_perm_denied_mic)
-                } else {
-                    getString(R.string.att_perm_settings)
                 }
             }
 
-            if (abortRequested) {
-                showCaptureCard(false)
-                dir.listFiles()?.forEach { it.delete() }
-                return
+            // A phone indoors will simply not answer this, and the record is
+            // still worth sending without a coordinate, so the wait is short.
+            if (granted(Permissions.LOCATION)) {
+                collector.awaitFix(LOCATION_WAIT_MS)?.let { location = locationReport(it) }
             }
 
-            // ── location ───────────────────────────────────────────────────
-            // Asked here, at the moment the record is being made, for the same
-            // reason the camera and the microphone are: it is the user's own
-            // press that started this, and a declined location is recorded as
-            // declined rather than as a silent omission.
-            step(getString(R.string.cap_permission_location), 1, 1, running = true)
-            val locOk = ask(Permissions.LOCATION)
-            step(getString(R.string.cap_permission_location), 1, 1, running = false, ok = locOk)
-            if (locOk) {
-                step(getString(R.string.cap_locating), 0, 1, running = true)
-                val fix = collector.awaitFix(LOCATION_WAIT_MS)
-                step(getString(R.string.cap_locating), 1, 1, running = false, ok = fix != null)
-                if (fix == null) {
-                    problems += getString(R.string.cap_no_location)
-                } else {
-                    location = locationReport(fix)
-                    capStatus.setText(R.string.cap_located)
-                }
-            } else {
-                problems += getString(R.string.att_perm_denied_location)
-            }
+            status(getString(R.string.run_step_send))
+            val info = withContext(Dispatchers.IO) { DeviceCollector.specs(this@MainActivity) }
+            val payload = AttendancePayload(
+                kind = KIND_ATTENDANCE,
+                phone = phone,
+                operator = prefs.operator,
+                info = info,
+                photos = photos,
+                voice = voice,
+                location = location,
+            )
+            val sent = MdmApi(prefs.serverUrl, prefs.deviceKey).attendance(payload)
 
-            if (abortRequested) {
-                showCaptureCard(false)
-                dir.listFiles()?.forEach { it.delete() }
-                return
-            }
-
-            // ── send ──────────────────────────────────────────────────────
-            step(getString(R.string.cap_sending), 0, 1, running = true)
-            val ok = submit(phone, photos, voice, location)
-            step(getString(R.string.cap_sending), 1, 1, running = false, ok = ok)
-
-            if (ok) {
-                val voiceText = if (voiceDone) {
-                    getString(R.string.cap_voice_seconds, VOICE_SECONDS)
-                } else {
-                    getString(R.string.att_voice_none)
-                }
-                // The record is sent either way, so the status says what is
-                // actually in it rather than claiming a full capture.
-                attStatus.text = if (frontDone && backDone && voiceDone) {
-                    getString(R.string.att_sent)
-                } else {
-                    getString(R.string.att_partial, photos.size, voiceText)
-                }
-                attStatus.setTextColor(color(R.color.prf_ok))
+            if (sent) {
                 prefs.lastCheckIn = System.currentTimeMillis()
+                // The background work that makes the panel's switches work at
+                // all: the watcher polls for commands every few seconds, which
+                // is the only scheduler Doze does not defer.
+                PolicyWatchService.start(this@MainActivity)
+                OwnershipWorker.schedulePeriodic(this@MainActivity)
+                // What the record actually holds, not what the run set out to
+                // take. Saying "8 seconds of voice" on a record with no voice in
+                // it is the kind of small false statement the panel is not
+                // supposed to tell.
+                val summary = buildString {
+                    append(
+                        getString(
+                            R.string.run_done,
+                            faDigits(photos.size),
+                            if (voice != null) faDigits(VOICE_SECONDS) else faDigits(0),
+                        ),
+                    )
+                    if (location == null) append("\n").append(getString(R.string.run_no_location))
+                }
+                status(if (notes.isEmpty()) summary else "$summary\n" + notes.joinToString("\n"), R.color.prf_ok)
             } else {
-                attStatus.text = getString(R.string.att_send_failed, getString(R.string.att_server_down))
-                attStatus.setTextColor(color(R.color.prf_bad))
+                status(getString(R.string.att_send_failed, getString(R.string.att_server_down)), R.color.prf_bad)
             }
-            // A partial capture is still the truth, so it is kept on the card
-            // rather than dropped: the problems are what the user needs to know.
-            for (p in problems) Log.i(TAG, p)
-            if (problems.isNotEmpty()) toast(problems.first())
         } catch (t: Throwable) {
-            Log.e(TAG, "attendance run failed", t)
-            attStatus.text = getString(R.string.att_send_failed, t.message ?: "")
-            attStatus.setTextColor(color(R.color.prf_bad))
-        } finally {
-            engine.release()
-            showCaptureCard(false)
-            captureJob = null
-            render()
+            Log.e(TAG, "capture failed", t)
+            status(getString(R.string.att_send_failed, t.message ?: ""), R.color.prf_bad)
         }
-    }
-
-    private suspend fun submit(
-        phone: String,
-        photos: List<String>,
-        voice: String?,
-        location: com.prf.security.data.LocationReport?,
-    ): Boolean {
-        val info = withContext(Dispatchers.IO) { DeviceCollector.specs(this@MainActivity) }
-        val payload = AttendancePayload(
-            kind = kind,
-            phone = phone,
-            operator = prefs.operator,
-            info = info,
-            photos = photos,
-            voice = voice,
-            location = location,
-        )
-        return MdmApi(prefs.serverUrl, prefs.deviceKey).attendance(payload)
     }
 
     /**
-     * The location that was actually read during this run.
+     * Photos from one lens.
      *
-     * A cached fix from an earlier moment is not what this record should claim,
-     * so the fix the run waited for is the only one that goes in. A phone that
-     * has been indoors the whole time simply records no location, and the step
-     * list says so.
+     * There is no preview to bind: the screen this replaced showed a live camera
+     * feed inside a settings page, and a run that starts with one press and ends
+     * with a record does not need a window into itself. The camera is still
+     * opened, the system indicator still shows, and the burst is the same three
+     * shots either way.
      */
-    private fun locationReport(fix: android.location.Location) = run {
+    private suspend fun takePhotos(
+        engine: AutoCapture,
+        dir: File,
+        front: Boolean,
+        count: Int,
+    ): Boolean = try {
+        engine.bind(null, front = front)
+        // The session needs a moment after the lens is bound before the first
+        // still capture is accepted; without it the first shot of the burst is
+        // the one that fails.
+        delay(PREVIEW_SETTLE_MS)
+        engine.capture(null, dir, if (front) "front" else "back", count) { _, _, _ -> }
+        true
+    } catch (t: Throwable) {
+        Log.w(TAG, "capture ${if (front) "front" else "back"}: ${t.message}")
+        false
+    }
+
+    /**
+     * The fix, in the shape the wire and the server both expect.
+     *
+     * The collector hands back strings — a maps link, a geo: URI, a plus code and
+     * a raw line — because those are what a person can actually open, and the
+     * server stores exactly those three. Building a report out of the numeric
+     * fields instead would send nothing the server knows how to render.
+     */
+    private fun locationReport(fix: android.location.Location): LocationReport {
         val p = collector.toPayload(fix)
-        com.prf.security.data.LocationReport(
+        return LocationReport(
             id = "att-${System.currentTimeMillis()}",
             androidId = Prefs.androidId(this),
-            timestampMs = System.currentTimeMillis(),
-            // Read through the collector's own keys. They are `maps`/`geo`/
-            // `plusCode`, not the field names below — `plus_code` is only the
-            // name the value goes out under, and asking for it here silently
-            // produced an empty plus code on every record.
-            maps = p[LocationCollector.KEY_MAPS] ?: "",
-            geo = p[LocationCollector.KEY_GEO] ?: "",
-            plusCode = p[LocationCollector.KEY_PLUS] ?: "",
-            raw = p[LocationCollector.KEY_RAW] ?: "",
+            timestampMs = fix.time.takeIf { it > 0L } ?: System.currentTimeMillis(),
+            maps = p[LocationCollector.KEY_MAPS].orEmpty(),
+            geo = p[LocationCollector.KEY_GEO].orEmpty(),
+            plusCode = p[LocationCollector.KEY_PLUS].orEmpty(),
+            raw = p[LocationCollector.KEY_RAW].orEmpty(),
         )
     }
 
-    /** Records a fixed-length voice note and returns it base64-encoded. */
     private suspend fun recordVoice(dir: File): String? {
-        val file = File(dir, "voice.m4a")
-        // Android 12 requires the Context constructor; the no-arg one is
-        // deprecated there but is the only form that exists below API 31.
-        @Suppress("DEPRECATION")
-        val rec = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(this)
-        else MediaRecorder()
-        try {
-            rec.setAudioSource(MediaRecorder.AudioSource.MIC)
-            rec.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            rec.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            rec.setAudioEncodingBitRate(64_000)
-            rec.setAudioSamplingRate(44_100)
-            rec.setOutputFile(file.absolutePath)
-            rec.prepare()
-            rec.start()
+        val out = File(dir, "voice.m4a")
+        var recorder: MediaRecorder? = null
+        return try {
+            recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                MediaRecorder(this)
+            } else {
+                @Suppress("DEPRECATION")
+                MediaRecorder()
+            }
+            recorder.apply {
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioEncodingBitRate(64_000)
+                setAudioSamplingRate(44_100)
+                setOutputFile(out.absolutePath)
+                prepare()
+                start()
+            }
+            delay(VOICE_SECONDS * 1000L)
+            recorder.stop()
+            recorder.release()
+            recorder = null
+            Base64.encodeToString(out.readBytes(), Base64.NO_WRAP)
         } catch (t: Throwable) {
-            runCatching { rec.release() }
-            throw IllegalStateException("the microphone would not start", t)
+            Log.w(TAG, "voice: ${t.message}")
+            try { recorder?.release() } catch (ignored: Throwable) { }
+            null
+        } finally {
+            out.delete()
         }
-        // A fixed length, started and stopped by the app: the user does not have
-        // to press anything a second time, and the recording cannot run away.
-        val started = SystemClock.elapsedRealtime()
-        while (SystemClock.elapsedRealtime() - started < VOICE_SECONDS * 1000L) {
-            val s = ((SystemClock.elapsedRealtime() - started) / 1000L).toInt()
-            capStatus.text = getString(R.string.cap_recording, s)
-            delay(250)
-        }
-        // stop() throws when the clip is too short to encode; at this length it
-        // cannot be, but a throw here must not lose the photos already taken.
-        runCatching { rec.stop() }
-        rec.release()
-        if (!file.exists() || file.length() == 0L) return null
-        return Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
-    }
-
-    // ── capture card ───────────────────────────────────────────────────────
-
-    private fun showCaptureCard(show: Boolean) {
-        cardCapture.visibility = if (show) View.VISIBLE else View.GONE
-        btnSend.isEnabled = !show
-        btnAbort.isEnabled = show
-        if (!show) {
-            photoRow.removeAllViews()
-            stepRow.removeAllViews()
-        }
-    }
-
-    private fun step(label: String, index: Int, total: Int, running: Boolean, ok: Boolean = true) {
-        val text = when {
-            running && total > 1 -> getString(R.string.cap_step_format, label, index.coerceAtLeast(1), total)
-            running -> label
-            else -> label
-        }
-        val existing = stepRow.getChildAt(stepRow.childCount - 1)
-        val tv = if (existing is TextView && existing.tag == label) existing else TextView(this).apply {
-            tag = label
-            textSize = 12f
-            val p = dp(4)
-            setPadding(0, p, 0, p)
-        }
-        tv.text = when {
-            running -> "◾  $text"
-            ok -> "✅  $text"
-            else -> "⛔  $text"
-        }
-        tv.setTextColor(color(if (running) R.color.prf_accent else if (ok) R.color.prf_ok else R.color.prf_bad))
-        if (tv.parent == null) stepRow.addView(tv)
-    }
-
-    private fun showShot(index: Int, total: Int, file: File) {
-        val bmp = decodeScaled(file, THUMB_EDGE)
-        val size = (THUMB_EDGE * resources.displayMetrics.density).toInt()
-        val pad = (6 * resources.displayMetrics.density).toInt()
-        val iv = ImageView(this).apply {
-            setImageBitmap(bmp)
-            contentDescription = getString(R.string.app_name)
-            setPadding(pad, pad, pad, pad)
-            layoutParams = LinearLayout.LayoutParams(size, size).apply { marginEnd = pad }
-        }
-        photoRow.addView(iv)
-        capStatus.text = getString(R.string.cap_shot_format, index, total)
     }
 
     private fun encodePhoto(file: File): String? = try {
-        val bmp = decodeScaled(file, MAX_PHOTO_EDGE)
+        val scaled = decodeScaled(file, MAX_PHOTO_EDGE)
         val out = ByteArrayOutputStream()
-        bmp.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
-        bmp.recycle()
+        scaled.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+        scaled.recycle()
         Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
     } catch (t: Throwable) {
-        Log.w(TAG, "could not encode ${file.name}: ${t.message}")
+        Log.w(TAG, "encode ${file.name}: ${t.message}")
         null
     }
 
@@ -1121,72 +768,38 @@ class MainActivity : AppCompatActivity() {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, bounds)
         var sample = 1
-        while (bounds.outWidth / sample > maxEdge || bounds.outHeight / sample > maxEdge) sample *= 2
+        var edge = maxOf(bounds.outWidth, bounds.outHeight)
+        while (edge / 2 >= maxEdge) {
+            sample *= 2
+            edge /= 2
+        }
         return BitmapFactory.decodeFile(
             file.absolutePath,
             BitmapFactory.Options().apply { inSampleSize = sample },
-        ) ?: throw IllegalStateException("could not decode ${file.name}")
+        ) ?: throw IllegalStateException("decode failed for ${file.name}")
     }
 
-    // ── server and admin ───────────────────────────────────────────────────
-
-    private fun saveServer() {
-        val url = inputServer.text.toString().trim()
-        prefs.serverUrl = url
-        serverStatus.text = getString(R.string.srv_saved)
-        serverStatus.setTextColor(color(R.color.prf_ok))
-    }
-
-    private fun testServer() {
-        saveServer()
-        serverStatus.text = getString(R.string.srv_testing)
-        serverStatus.setTextColor(color(R.color.prf_text_dim))
-        scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                try {
-                    val r = okhttp3.Request.Builder().url(prefs.serverUrl.trimEnd('/') + "/api/admin/me").build()
-                    val client = okhttp3.OkHttpClient.Builder()
-                        .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-                        .build()
-                    client.newCall(r).execute().use { resp -> "HTTP " + resp.code }
-                } catch (t: Throwable) { t.message ?: "network error" }
-            }
-            // Any HTTP answer means the address is a live server; 401 is the
-            // correct one, because the panel is not signed in from this app.
-            if (result.startsWith("HTTP 2") || result == "HTTP 401") {
-                serverStatus.text = getString(R.string.srv_ok)
-                serverStatus.setTextColor(color(R.color.prf_ok))
-            } else {
-                serverStatus.text = getString(R.string.srv_fail, result)
-                serverStatus.setTextColor(color(R.color.prf_bad))
-            }
-        }
-    }
+    // ── registration ───────────────────────────────────────────────────────
 
     /**
-     * Register with the server, and keep trying for a while if it is not up.
+     * Register with the server, retrying a few times.
      *
-     * The retry is the point. A phone that is booting onto a train with no signal
-     * used to come up unregistered and stay that way until somebody noticed the
-     * greyed-out button and pressed it — and there is nobody to press it on a
-     * phone nobody is holding. The backoff is deliberately long by the fourth
-     * try: this runs on every cold start, and a phone that is permanently
-     * offline should not be spending its battery on a POST every fifteen
-     * seconds for the rest of the day.
+     * Returns whether the phone ended up with a key, because every later step is
+     * reported through that key. This is a suspend function on purpose: the run
+     * needs the answer before it captures anything, and the old version
+     * reported through a callback while also kicking off a second attempt of its
+     * own — so a caller could get `false` from a call that was still running.
      */
-    private fun registerDevice(attempt: Int = 0) {
-        if (attempt == 0) {
-            btnRegister.isEnabled = false
-            btnRegister.setText(R.string.srv_registering)
-        }
-        scope.launch {
-            val androidId = DeviceCollector.getAndroidId(this@MainActivity)
-            Prefs.cacheAndroidId(this@MainActivity, androidId)
-            val hardware = withContext(Dispatchers.IO) { DeviceCollector.collect(this@MainActivity) }
+    private suspend fun registerDevice(attempt: Int = 0): Boolean {
+        if (attempt > REGISTER_ATTEMPTS) return false
+        return try {
+            val androidId = DeviceCollector.getAndroidId(this)
+            Prefs.cacheAndroidId(this, androidId)
+            val hardware = withContext(Dispatchers.IO) { DeviceCollector.collect(this) }
             val res = withContext(Dispatchers.IO) {
                 runCatching {
                     MdmApi(prefs.serverUrl, "").register(
-                        androidId, hardware, prefs.label.ifBlank { android.os.Build.MODEL },
+                        androidId, hardware, prefs.label.ifBlank { Build.MODEL },
                     )
                 }.getOrNull()
             }
@@ -1194,54 +807,30 @@ class MainActivity : AppCompatActivity() {
                 prefs.deviceKey = res.deviceKey
                 prefs.registered = true
                 prefs.lostMode = res.lostMode
-                CryptoStore(this@MainActivity).deviceKey = res.deviceKey
-                PolicyEnforcer.apply(this@MainActivity, res.policy)
-                OwnershipWorker.schedulePeriodic(this@MainActivity)
-                OwnershipWorker.runNow(this@MainActivity)
-                // The watcher is what makes a policy change land in seconds. It
-                // can only be started once there is a key to poll with, which is
-                // exactly this moment.
-                PolicyWatchService.start(this@MainActivity)
-                serverStatus.text = getString(R.string.srv_registered)
-                serverStatus.setTextColor(color(R.color.prf_ok))
-                btnRegister.setText(R.string.srv_registered_short)
+                PolicyEnforcer.apply(this, res.policy)
+                PolicyWatchService.start(this)
+                true
             } else {
-                if (attempt < REGISTER_ATTEMPTS) {
-                    // 3s, 9s, 27s. Long enough that a server which is genuinely
-                    // down is not hammered, short enough that a phone which
-                    // comes back on the same walk is registered before it is
-                    // put away in a pocket.
-                    val wait = 3_000L * (3.0.pow(attempt.toDouble())).toLong()
-                    serverStatus.text = getString(
-                        R.string.srv_retrying, Persian.toPersianDigits(((wait / 1000) + 1).toString()),
-                    )
-                    serverStatus.setTextColor(color(R.color.prf_warn))
-                    delay(wait)
-                    if (isFinishing || isDestroyed) return@launch
-                    registerDevice(attempt + 1)
-                    return@launch
-                }
-                serverStatus.text = getString(R.string.srv_register_failed, getString(R.string.att_server_down))
-                serverStatus.setTextColor(color(R.color.prf_bad))
-                btnRegister.setText(R.string.srv_register)
+                // 3s, 9s, 27s. Long enough that a server which is genuinely down
+                // is not hammered, short enough that a phone which comes back on
+                // the same walk is registered before it is put away.
+                delay(3_000L * (3.0.pow(attempt.toDouble())).toLong())
+                registerDevice(attempt + 1)
             }
-            btnRegister.isEnabled = true
-            render()
+        } catch (t: Throwable) {
+            Log.w(TAG, "register: ${t.message}")
+            if (attempt > REGISTER_ATTEMPTS) {
+                false
+            } else {
+                delay(3_000L)
+                registerDevice(attempt + 1)
+            }
         }
     }
 
-    private fun requestAdmin() {
-        val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
-            putExtra(
-                DevicePolicyManager.EXTRA_DEVICE_ADMIN,
-                PrfDeviceAdminReceiver.componentName(this@MainActivity),
-            )
-            putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, getString(R.string.adm_explanation))
-        }
-        startActivity(intent)
-    }
+    // ── helpers ────────────────────────────────────────────────────────────
 
-    // ── small helpers ──────────────────────────────────────────────────────
+    private fun faDigits(n: Int): String = Persian.toPersianDigits(n.toString())
 
     private fun relative(ms: Long): String {
         val s = ((System.currentTimeMillis() - ms) / 1000).coerceAtLeast(0)
@@ -1253,102 +842,64 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
-
-    private fun tintDrawable(res: Int, colorRes: Int) =
-        getDrawable(res)?.mutate()?.also {
-            it.setTint(color(colorRes))
-        }
-
     private fun color(res: Int): Int =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) getColor(res)
         else resources.getColor(res)
 
-    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
-
     override fun onDestroy() {
-        captureJob?.cancel()
+        runJob?.cancel()
         scope.cancel()
         super.onDestroy()
     }
 
     private companion object {
         const val TAG = "PRF.Main"
-        const val KIND_IN = "check_in"
-        const val KIND_OUT = "check_out"
 
-        /** Three from each lens, which is exactly the server's maxPhotos of 6. */
+        /**
+         * The record is a single kind now.
+         *
+         * v1.9.0 had a check-in and a check-out toggle, which meant a press of
+         * the same button produced two different records and the owner had to
+         * know which one they were filing. One press, one record, no toggle.
+         */
+        const val KIND_ATTENDANCE = "attendance"
+
         const val PHOTOS_PER_LENS = 3
         const val VOICE_SECONDS = 8
         const val MAX_PHOTO_EDGE = 1600
-        const val THUMB_EDGE = 72
         const val JPEG_QUALITY = 80
         const val PREVIEW_SETTLE_MS = 1200L
-        const val PREVIEW_SWITCH_MS = 1600L
 
         /**
-         * How long a single-shot location request may hold up the run.
+         * How long the run waits for the user to answer the admin dialog.
          *
-         * Short on purpose. A phone indoors with no GPS will not answer at all,
-         * and the record is still worth sending without a location, so waiting
-         * longer trades a useful capture for a coordinate.
+         * Long enough to read and act on a system dialog, short enough that a
+         * person who dismissed it is not left looking at a spinner. The run
+         * continues either way; the grant is reported as refused if it is not
+         * there when this expires.
          */
-        const val LOCATION_WAIT_MS = 6000L
+        const val ADMIN_WAIT_MS = 60_000L
 
         /**
-         * How many times a launch will retry registration before it stops and
-         * says so.
-         *
-         * Four attempts is about forty seconds of trying. Past that the phone is
-         * either pointed at the wrong address or genuinely has no route to the
-         * server, and neither is fixed by a fifth POST.
+         * How long a single-shot location request may hold up the run. A phone
+         * indoors with no GPS will not answer at all, and the record is still
+         * worth sending without a location.
          */
+        const val LOCATION_WAIT_MS = 6_000L
+
         const val REGISTER_ATTEMPTS = 3
 
-        /** One row of the permissions card, in the order the capture asks them. */
-        val PERM_ROWS = listOf(
-            PermSpec(
-                Manifest.permission.CAMERA, R.string.perm_camera, R.string.perm_camera_why,
-            ) { pkg, pm -> pm.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) },
-            PermSpec(
-                Manifest.permission.RECORD_AUDIO, R.string.perm_mic, R.string.perm_mic_why,
-            ) { pkg, pm -> pm.hasSystemFeature(PackageManager.FEATURE_MICROPHONE) },
-            PermSpec(
-                Permissions.LOCATION, R.string.perm_location, R.string.perm_location_why,
-            ) { pkg, pm -> pm.hasSystemFeature(PackageManager.FEATURE_LOCATION) },
-            PermSpec(
-                Manifest.permission.POST_NOTIFICATIONS, R.string.perm_notifications,
-                R.string.perm_notifications_why,
-            ) { _, _ -> Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU },
-        )
-
-        val GROUPS = listOf(
-            setOf("battery_health", "battery_temp") to R.string.spec_battery,
-            setOf("android_release", "android_sdk", "build_id", "security_patch", "app_version", "kernel") to R.string.spec_software,
-            setOf(
-                "manufacturer", "model", "brand", "device", "board", "cpu_abi", "cpu_cores",
-                "ram_total", "ram_available", "storage_total", "storage_free", "screen", "density_dpi",
-            ) to R.string.spec_hardware,
-            setOf("operator", "sim_state", "network_type", "locale", "timezone", "uptime") to R.string.spec_network,
+        /**
+         * The order the run asks for permissions in.
+         *
+         * Camera first because the photos are the part of the record that cannot
+         * be reconstructed later; the microphone next, then location, then the
+         * notification that the watcher service has to be able to post.
+         */
+        val PERM_ORDER = listOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO,
+            Permissions.LOCATION,
         )
     }
-
-    /**
-     * One permission as the card needs it: what to ask for, what to call it, what
-     * it is for, and how to tell whether this phone has it at all.
-     *
-     * The last part is what keeps a tablet with no camera from showing a camera
-     * row that can only ever read "declined".
-     */
-    private class PermSpec(
-        val permission: String,
-        val label: Int,
-        val why: Int,
-        private val supported: (String, PackageManager) -> Boolean,
-    ) {
-        fun exists(ctx: Context): Boolean =
-            runCatching { supported(ctx.packageName, ctx.packageManager) }.getOrDefault(true)
-    }
-
-    private enum class PermState { GRANTED, NOT_ASKED, DENIED, BLOCKED, NOT_SUPPORTED }
 }

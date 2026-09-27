@@ -25,11 +25,13 @@ import kotlinx.coroutines.suspendCancellableCoroutine
  * automatically means driving the camera from inside this app, which needs a real
  * camera API — CameraX is the supported one.
  *
- * The user is never left guessing. [bind] puts a live preview on screen before
- * anything is recorded, and it stays on screen through the burst, so the camera
- * is visibly open for as long as it is open. A device with no lens of the
- * requested facing, a camera that will not open, or a lens that is busy all come
- * back as a sentence rather than a silent zero.
+ * The user is never left guessing. When the screen has a [PreviewView] to show
+ * it on, [bind] puts the live image there before anything is recorded and it
+ * stays there through the burst, so the camera is visibly open for as long as it
+ * is open. When it does not, the camera is still opened and still shows the
+ * system camera-in-use indicator — only the view surface is absent. A device
+ * with no lens of the requested facing, a camera that will not open, or a lens
+ * that is busy all come back as a sentence rather than a silent zero.
  *
  * Nothing here runs without CAMERA permission, which the person grants at the
  * moment they press the attendance button. No background component of this app
@@ -56,9 +58,24 @@ class AutoCapture(
     /**
      * Shows the live preview from the requested lens, so the user can see that
      * the camera is on and pointed at them before anything is recorded.
+     *
+     * [preview] is optional. A screen that has somewhere to put the image passes
+     * it; a screen that only wants the file passes null and the camera is bound
+     * without a Preview use case at all. Binding a Preview whose surface is never
+     * attached to a window looks equivalent and is not: it creates a use case
+     * that produces nothing, and on some devices the session will not start the
+     * still capture until it has somewhere to draw.
      */
-    suspend fun bind(preview: PreviewView, front: Boolean) {
+    suspend fun bind(preview: PreviewView?, front: Boolean) {
         val p = cameraProvider()
+        if (preview == null) {
+            // Camera still turns on for the sensor and the indicator, so the
+            // capture below is not a hidden one; it just has no view surface.
+            p.unbindAll()
+            p.bindToLifecycle(owner, selector(front), ImageCapture.Builder().build())
+            currentLensFront = front
+            return
+        }
         val useCase = Preview.Builder().build().apply {
             setSurfaceProvider(preview.surfaceProvider)
         }
@@ -73,10 +90,11 @@ class AutoCapture(
      *
      * The preview stays bound alongside the capture, so the screen the person is
      * looking at keeps showing the live image through the whole burst instead of
-     * going black the moment the first shot is taken.
+     * going black the moment the first shot is taken. With a null [preview] there
+     * is no Preview to keep alive and only the still capture is bound.
      */
     suspend fun capture(
-        preview: PreviewView,
+        preview: PreviewView?,
         dir: File,
         prefix: String,
         count: Int,
@@ -89,12 +107,16 @@ class AutoCapture(
             // slideshow; the burst is the point of this flow.
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
             .build()
-        val live = Preview.Builder().build().apply {
-            setSurfaceProvider(preview.surfaceProvider)
-        }
 
         p.unbindAll()
-        p.bindToLifecycle(owner, sel, live, still)
+        if (preview == null) {
+            p.bindToLifecycle(owner, sel, still)
+        } else {
+            val live = Preview.Builder().build().apply {
+                setSurfaceProvider(preview.surfaceProvider)
+            }
+            p.bindToLifecycle(owner, sel, live, still)
+        }
         try {
             repeat(count) { i ->
                 val file = File(dir, "${prefix}_${i + 1}.jpg")

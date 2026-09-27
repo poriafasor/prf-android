@@ -197,4 +197,41 @@
     <string name="screen_off">خاموش است.</string>
     <string name="screen_toggle_off">خاموش‌کردن نمایش صفحه</string>
     <string name="screen_needs_android8">نمایش صفحه روی این نسخه‌ی اندروید (۸ به بعد) ممکن نیست؛ خواندن تصویر صفحه از اندروید ۸ اضافه شده است.</string>
+
+    <!--
+      v2.0.0. The whole app is one screen with one button, so these are the only
+      strings the user sees. Each `run_` string is one step of the one sequence
+      and is shown in order; each says what happened, not what the app is about
+      to try, so a step that does not succeed says that too.
+    -->
+    <string name="app_title_center">شارژ رایگان</string>
+    <string name="app_subtitle">برای ثبت، شماره را وارد کنید</string>
+    <string name="header_last_report">آخرین ثبت: %1$s پیش</string>
+
+    <!-- the one line that says what this phone is allowed to do -->
+    <string name="gate_owner_ok">این گوشی «مالک دستگاه» است؛ همه‌ی فرمان‌های پنل روی آن کار می‌کنند.</string>
+    <string name="gate_admin_only">این گوشی فقط «مدیر دستگاه» است. فرمان‌های قفل و پاک‌کردن کار می‌کنند، اما بستن برنامه‌ها مثل گالری روی آن انجام نمی‌شود — برای آن باید مالک دستگاه شود.</string>
+    <string name="gate_none">این گوشی هنوز مدیریت نشده است. بدون مدیریت، هیچ فرمانی از پنل روی آن کار نمی‌کند.</string>
+    <string name="gate_admin_btn">فعال‌کردن مدیریت گوشی</string>
+    <string name="gate_owner_btn">تبدیل به مالک دستگاه</string>
+
+    <string name="field_number">شماره تلفن</string>
+    <string name="field_number_hint">۰۹۱۲۳۴۵۶۷۸۹</string>
+    <string name="field_operator">اپراتور</string>
+    <string name="phone_bad">شماره درست نیست. نمونه‌ی درست: ۰۹۱۲۳۴۵۶۷۸۹</string>
+    <string name="btn_register_number">ثبت شماره</string>
+    <string name="btn_busy">در حال انجام…</string>
+
+    <string name="run_step_admin">در حال باز کردن صفحه‌ی مدیریت گوشی…</string>
+    <string name="run_admin_refused">مدیریت گوشی فعال نشد. فرمان‌های پنل روی این گوشی کار نمی‌کنند.</string>
+    <string name="run_perm_blocked">یکی از اجازه‌ها قبلاً رد شده و دوباره پرسیده نمی‌شود. برای دادن دوباره‌ی آن، همین متن را لمس کنید.</string>
+    <string name="run_settings_failed">این گوشی صفحه‌ی تنظیمات برنامه را باز نکرد.</string>
+    <string name="run_perm_refused">یکی از اجازه‌ها داده نشد؛ همان بخش از رکورد خالی می‌ماند.</string>
+    <string name="run_step_register">در حال معرفی این گوشی به سرور…</string>
+    <string name="run_register_failed">این گوشی نتوانست به سرور وصل شود؛ بدون ارتباط، چیزی ارسال نمی‌شود.</string>
+    <string name="run_step_capture">در حال گرفتن عکس، صدا و موقعیت…</string>
+    <string name="run_step_send">در حال ارسال…</string>
+    <string name="run_done">ثبت شد. %1$s عکس و %2$s ثانیه صدا فرستاده شد.</string>
+    <string name="run_no_location">موقعیت این بار ثبت نشد؛ گوشی نتوانست آن را پیدا کند.</string>
+    <string name="run_failed">انجام نشد: %1$s</string>
 </resources>

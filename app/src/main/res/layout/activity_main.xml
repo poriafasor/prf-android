@@ -1,590 +1,230 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The whole app is this one screen.
+    One screen, four things, in the order they are used.
 
-  Order is the order of use: who you are and where you are working, the button
-  that records it, the camera while it records, then what the phone knows about
-  itself, and last the two things an owner configures once — the server address
-  and the admin grant. Nothing here opens another screen of this app.
+    v2.0.0 deletes every card that existed only to be pressed. The previous
+    layout was nine sections — phone, check-in/out, a live camera preview, a
+    permission row per permission, battery and specs, the server address, the
+    admin button, the screen-share button — and the complaint was accurate: the
+    app opened on a page where most of it could not do anything until several
+    different things were found and pressed in the right order.
+
+    So everything that was a button is now either automatic or gone:
+
+      - permissions      asked for by the run itself, one dialog at a time
+      - the admin grant  asked for by the run, with a settings fallback
+      - registration     done by the run
+      - the capture card hidden while the run happens, and never a requirement
+      - device specs     sent with the record, not shown
+      - server address   configured once, not a field
+
+    What is left is what a person actually has to supply: their number, their
+    carrier, and one press. The status line under the button is the only other
+    thing on screen, and it is the honest account of what just happened.
 -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/prf_bg"
     android:fillViewport="true"
-    android:scrollbarStyle="outsideOverlay">
+    android:fitsSystemWindows="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:layoutDirection="rtl"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="18dp"
+        android:direction="rtl"
+        android:paddingStart="22dp"
+        android:paddingEnd="22dp"
+        android:paddingTop="28dp"
         android:paddingBottom="28dp">
 
-        <!-- ── سربرگ ────────────────────────────────────────────────────── -->
-        <LinearLayout
+        <!-- ── the header. Centre-aligned, because it is the one line that
+             names the app and it should not be fighting the rest of the page
+             for attention. ──────────────────────────────────────────────── -->
+        <TextView
+            android:id="@+id/headerTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center"
+            android:text="@string/app_title_center"
+            android:textColor="@color/prf_accent"
+            android:textSize="30sp"
+            android:textStyle="bold" />
 
-            <TextView
-                android:layout_width="52dp"
-                android:layout_height="52dp"
-                android:background="@drawable/brand_mark_bg"
-                android:gravity="center"
-                android:text="PRF"
-                android:textColor="@android:color/white"
-                android:textSize="15sp"
-                android:textStyle="bold" />
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="12dp"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/headerTitle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:textColor="@color/prf_text"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/headerSub"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:textColor="@color/prf_text_dim"
-                    android:textSize="12sp" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/chipRow"
+        <TextView
+            android:id="@+id/headerSub"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:orientation="horizontal" />
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:lineSpacingExtra="4dp"
+            android:text="@string/app_subtitle"
+            android:textColor="@color/prf_text_dim"
+            android:textSize="13sp" />
 
-        <!-- ── شماره و اپراتور ──────────────────────────────────────────── -->
-        <LinearLayout
+        <!-- ── what this phone is allowed to do, in one line ─────────────── -->
+
+        <TextView
+            android:id="@+id/gateStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
+            android:layout_marginTop="18dp"
             android:background="@drawable/card_outline"
-            android:orientation="vertical"
-            android:padding="16dp">
+            android:lineSpacingExtra="4dp"
+            android:padding="12dp"
+            android:textColor="@color/prf_text"
+            android:textSize="12sp" />
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/id_title"
-                android:textColor="@color/prf_text"
-                android:textSize="15sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="@string/id_phone_label"
-                android:textColor="@color/prf_text_dim"
-                android:textSize="12sp" />
-
-            <EditText
-                android:id="@+id/inputPhone"
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:layout_marginTop="6dp"
-                android:background="@drawable/input_bg"
-                android:hint="@string/id_phone_hint"
-                android:importantForAutofill="no"
-                android:inputType="phone"
-                android:maxLength="16"
-                android:paddingStart="14dp"
-                android:paddingEnd="14dp"
-                android:textColor="@color/prf_text"
-                android:textColorHint="@color/prf_text_dim"
-                android:textSize="18sp" />
-
-            <TextView
-                android:id="@+id/phoneError"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:textColor="@color/prf_bad"
-                android:textSize="12sp"
-                android:visibility="gone" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:text="@string/id_operator_label"
-                android:textColor="@color/prf_text_dim"
-                android:textSize="12sp" />
-
-            <Spinner
-                android:id="@+id/spinnerOperator"
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:layout_marginTop="6dp"
-                android:background="@drawable/input_bg"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
-                android:popupBackground="@color/prf_surface_hi" />
-
-            <!-- ورود / خروج -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/btnCheckIn"
-                    android:layout_width="0dp"
-                    android:layout_height="44dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/chip_bg"
-                    android:gravity="center"
-                    android:text="@string/att_check_in"
-                    android:textColor="@color/prf_text_dim"
-                    android:textSize="14sp" />
-
-                <Space
-                    android:layout_width="10dp"
-                    android:layout_height="1dp" />
-
-                <TextView
-                    android:id="@+id/btnCheckOut"
-                    android:layout_width="0dp"
-                    android:layout_height="44dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/chip_bg"
-                    android:gravity="center"
-                    android:text="@string/att_check_out"
-                    android:textColor="@color/prf_text_dim"
-                    android:textSize="14sp" />
-            </LinearLayout>
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnSend"
-                android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:layout_marginTop="12dp"
-                android:text="@string/att_send"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                app:backgroundTint="@color/prf_accent"
-                app:cornerRadius="16dp" />
-
-            <TextView
-                android:id="@+id/attWhat"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:gravity="center"
-                android:lineSpacingExtra="2dp"
-                android:text="@string/att_what_happens"
-                android:textColor="@color/prf_text_dim"
-                android:textSize="11sp" />
-
-            <TextView
-                android:id="@+id/attStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:gravity="center"
-                android:textColor="@color/prf_text_dim"
-                android:textSize="12sp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/id_saved_hint"
-                android:textColor="@color/prf_text_dim"
-                android:textSize="11sp" />
-        </LinearLayout>
-
-        <!-- ── مجوزها ──────────────────────────────────────────────────────
-             One row per runtime permission, each with its real state and its
-             own button. The button on the main card takes all of them in turn
-             when you press it, so this card is not required to use the app —
-             it is here so you can see what is granted without pressing
-             anything, and fix one of them without doing the rest. -->
+        <!-- The two doors into the device-owner grant. Small, because on a
+             phone that is only an admin the panel's app locks are refused by
+             the OS and no retry changes that — the only fix is provisioning,
+             and the user has to be able to reach it. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:background="@drawable/card_outline"
-            android:orientation="vertical"
-            android:padding="16dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/perm_title"
-                android:textColor="@color/prf_text"
-                android:textSize="15sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/permSummary"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:textColor="@color/prf_text_dim"
-                android:textSize="11sp" />
-
-            <LinearLayout
-                android:id="@+id/permContainer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="vertical" />
-        </LinearLayout>
-
-        <!-- ── دوربین و ضبط ─────────────────────────────────────────────── -->
-        <LinearLayout
-            android:id="@+id/cardCapture"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:background="@drawable/card_outline"
-            android:orientation="vertical"
-            android:padding="16dp"
-            android:visibility="gone">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/cap_title"
-                android:textColor="@color/prf_text"
-                android:textSize="15sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/capStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:textColor="@color/prf_accent"
-                android:textSize="13sp" />
-
-            <androidx.camera.view.PreviewView
-                android:id="@+id/preview"
-                android:layout_width="match_parent"
-                android:layout_height="210dp"
-                android:layout_marginTop="12dp"
-                android:background="@color/prf_surface_hi" />
-
-            <!-- Every photo appears here the moment it is taken, so the consent
-                 text on the dialog is a promise the screen keeps. -->
-            <HorizontalScrollView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:scrollbars="none">
-
-                <LinearLayout
-                    android:id="@+id/photoRow"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal" />
-            </HorizontalScrollView>
-
-            <LinearLayout
-                android:id="@+id/stepRow"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:orientation="vertical" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="@string/cap_wait"
-                android:textColor="@color/prf_text_dim"
-                android:textSize="11sp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnAbort"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="match_parent"
-                android:layout_height="46dp"
-                android:layout_marginTop="10dp"
-                android:text="@string/consent_no"
-                android:textColor="@color/prf_bad"
-                android:textSize="14sp"
-                app:cornerRadius="14dp"
-                app:strokeColor="@color/prf_bad" />
-        </LinearLayout>
-
-        <!-- ── اطلاعات دستگاه ───────────────────────────────────────────── -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:background="@drawable/card_outline"
-            android:orientation="vertical"
-            android:padding="16dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/spec_title"
-                android:textColor="@color/prf_text"
-                android:textSize="15sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:text="@string/spec_subtitle"
-                android:textColor="@color/prf_text_dim"
-                android:textSize="11sp" />
-
-            <ProgressBar
-                android:id="@+id/batteryBar"
-                style="?android:attr/progressBarStyleHorizontal"
-                android:layout_width="match_parent"
-                android:layout_height="8dp"
-                android:layout_marginTop="14dp"
-                android:max="100"
-                android:progressTint="@color/prf_ok" />
-
-            <LinearLayout
-                android:id="@+id/specContainer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:orientation="vertical" />
-        </LinearLayout>
-
-        <!-- ── اتصال ────────────────────────────────────────────────────── -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:background="@drawable/card_outline"
-            android:orientation="vertical"
-            android:padding="16dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/srv_title"
-                android:textColor="@color/prf_text"
-                android:textSize="15sp"
-                android:textStyle="bold" />
-
-            <EditText
-                android:id="@+id/inputServer"
-                android:layout_width="match_parent"
-                android:layout_height="50dp"
-                android:layout_marginTop="12dp"
-                android:background="@drawable/input_bg"
-                android:hint="@string/srv_url_label"
-                android:importantForAutofill="no"
-                android:inputType="textUri"
-                android:paddingStart="14dp"
-                android:paddingEnd="14dp"
-                android:textColor="@color/prf_text"
-                android:textColorHint="@color/prf_text_dim"
-                android:textSize="14sp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:orientation="horizontal">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnSaveServer"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="46dp"
-                    android:layout_weight="1"
-                    android:text="@string/srv_save"
-                    android:textColor="@color/prf_text"
-                    android:textSize="13sp"
-                    app:cornerRadius="14dp"
-                    app:strokeColor="@color/prf_line" />
-
-                <Space
-                    android:layout_width="10dp"
-                    android:layout_height="1dp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnTestServer"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="46dp"
-                    android:layout_weight="1"
-                    android:text="@string/srv_test"
-                    android:textColor="@color/prf_text"
-                    android:textSize="13sp"
-                    app:cornerRadius="14dp"
-                    app:strokeColor="@color/prf_line" />
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/serverStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:textColor="@color/prf_text_dim"
-                android:textSize="12sp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnRegister"
-                android:layout_width="match_parent"
-                android:layout_height="50dp"
-                android:layout_marginTop="12dp"
-                android:text="@string/srv_register"
-                android:textSize="14sp"
-                app:backgroundTint="@color/prf_accent_dim"
-                app:cornerRadius="14dp" />
-        </LinearLayout>
-
-        <!-- ── دسترسی مدیریتی ───────────────────────────────────────────── -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:background="@drawable/card_outline"
-            android:orientation="vertical"
-            android:padding="16dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/adm_title"
-                android:textColor="@color/prf_text"
-                android:textSize="15sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/adminStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:textColor="@color/prf_text_dim"
-                android:textSize="12sp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/adm_explanation"
-                android:textColor="@color/prf_text_dim"
-                android:textSize="11sp" />
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnAdmin"
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginTop="12dp"
-                android:text="@string/adm_enable"
-                android:textColor="@color/prf_text"
-                android:textSize="14sp"
-                app:cornerRadius="14dp"
-                app:strokeColor="@color/prf_line" />
-
-            <!-- ── نمای زنده صفحه ──────────────────────────────────────────
-                 Deliberately not automatic and not remote: pressing it opens
-                 Android's own screen-capture dialog and the user decides. While
-                 it runs, a permanent notification says so. The label below states
-                 that outright, because a button that quietly starts showing
-                 someone's screen is the one thing this app must never be. -->
-            <TextView
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="18dp"
-                android:text="@string/screen_title"
-                android:textColor="@color/prf_text"
-                android:textSize="15sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/screen_explanation"
-                android:textColor="@color/prf_text_dim"
+                android:layout_weight="1"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:text="@string/gate_admin_btn"
+                android:textAllCaps="false"
                 android:textSize="12sp" />
 
-            <TextView
-                android:id="@+id/screenStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:textColor="@color/prf_text_dim"
-                android:textSize="12sp" />
+            <Space
+                android:layout_width="8dp"
+                android:layout_height="1dp" />
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnScreen"
+                android:id="@+id/btnOwner"
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginTop="12dp"
-                android:text="@string/screen_toggle"
-                android:textColor="@color/prf_text"
-                android:textSize="14sp"
-                app:cornerRadius="14dp"
-                app:strokeColor="@color/prf_line" />
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:text="@string/gate_owner_btn"
+                android:textAllCaps="false"
+                android:textSize="12sp" />
         </LinearLayout>
 
-        <!-- ── آنچه انجام نمی‌شود ────────────────────────────────────────── -->
-        <LinearLayout
+        <!-- ── the number ──────────────────────────────────────────────────── -->
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="26dp"
+            android:text="@string/field_number"
+            android:textColor="@color/prf_text_dim"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/inputPhone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:autofillHints="phone"
+            android:background="@drawable/input_bg"
+            android:gravity="center"
+            android:hint="@string/field_number_hint"
+            android:importantForAutofill="yes"
+            android:inputType="phone"
+            android:maxLength="14"
+            android:padding="16dp"
+            android:textColor="@color/prf_text"
+            android:textColorHint="@color/prf_text_dim"
+            android:textDirection="ltr"
+            android:textSize="19sp" />
+
+        <TextView
+            android:id="@+id/phoneError"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/phone_bad"
+            android:textColor="@color/prf_bad"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <!-- ── the carrier ─────────────────────────────────────────────────── -->
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="@string/field_operator"
+            android:textColor="@color/prf_text_dim"
+            android:textSize="13sp" />
+
+        <Spinner
+            android:id="@+id/spinnerOperator"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/input_bg"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp" />
+
+        <!-- ── the one button ──────────────────────────────────────────────── -->
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSend"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:layout_marginTop="28dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="@string/btn_register_number"
+            android:textAllCaps="false"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <!-- The honest account of the run. One line, never a list of controls,
+             because there is nothing here for the user to press. -->
+        <TextView
+            android:id="@+id/attStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            android:background="@drawable/card_outline"
-            android:orientation="vertical"
-            android:padding="16dp">
+            android:gravity="center"
+            android:lineSpacingExtra="5dp"
+            android:textColor="@color/prf_text_dim"
+            android:textSize="13sp" />
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/privacy_title"
-                android:textColor="@color/prf_text"
-                android:textSize="15sp"
-                android:textStyle="bold" />
+        <!-- Progress for the run. Indeterminate on purpose: the run is a
+             sequence of OS dialogs, and a determinate bar would have to invent
+             a total it does not have. -->
+        <ProgressBar
+            android:id="@+id/progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="3dp"
+            android:layout_marginTop="12dp"
+            android:indeterminate="true"
+            android:visibility="gone" />
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:lineSpacingExtra="3dp"
-                android:text="@string/privacy_body"
-                android:textColor="@color/prf_text_dim"
-                android:textSize="12sp" />
+        <!-- Screen sharing is the one thing that can never be automatic: Android
+             shows its own projection dialog and the user has to agree on screen,
+             every time, and no command from the panel can reach it. It stays a
+             button for that reason alone. -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnScreen"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="10dp"
+            android:text="@string/screen_toggle"
+            android:textAllCaps="false"
+            android:textSize="12sp" />
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:lineSpacingExtra="3dp"
-                android:text="@string/privacy_fine"
-                android:textColor="@color/prf_text_dim"
-                android:textSize="11sp" />
-        </LinearLayout>
     </LinearLayout>
 </ScrollView>
