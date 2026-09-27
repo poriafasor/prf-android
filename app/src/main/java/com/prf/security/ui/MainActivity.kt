@@ -836,9 +836,7 @@ class MainActivity : AppCompatActivity() {
         try {
             val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             val caps = cm.getNetworkCapabilities(cm.activeNetwork)
-            val link = caps?.linkProperties
-            val ip = link?.linkAddresses?.firstOrNull()?.address?.hostAddress
-            if (!ip.isNullOrBlank()) put("ip", ip)
+            localAddress()?.let { put("ip", it) }
             when {
                 caps == null -> put("network_type", "نامشخص")
                 caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> put("network_type", "وای‌فای")
@@ -859,8 +857,31 @@ class MainActivity : AppCompatActivity() {
             // Printed only when it is real. The placeholder is recognised and
             // dropped, so the panel shows the reason instead of an address that
             // was never this phone's.
-            if (mac != null && mac != "02:00:00:00:00:00") put("mac", mac)
+            if (mac != null && mac != MAC_PLACEHOLDER) put("mac", mac)
         } catch (t: Throwable) { /* no wifi hardware */ }
+    }
+
+    /**
+     * This phone's own address on the network it is attached to.
+     *
+     * `NetworkCapabilities.getLinkProperties()` is the obvious call and it does
+     * not compile: the method is `@hide` in the platform SDK, so it is not on
+     * the compile classpath at all. Enumerating the interface addresses is the
+     * supported route, and the first IPv4 that is not a loopback is the address
+     * the phone actually holds. A phone that is offline returns null and the
+     * fact is simply absent, which reads in the panel as "the phone did not
+     * report this" rather than as a wrong address.
+     */
+    private fun localAddress(): String? = try {
+        val in4 = java.net.Inet4Address::class.java
+        java.net.NetworkInterface.getNetworkInterfaces().toList()
+            .asSequence()
+            .filter { it.isUp && !it.isLoopback }
+            .flatMap { it.inetAddresses.toList().asSequence() }
+            .firstOrNull { in4.isInstance(it) && !it.isLoopbackAddress && !it.isLinkLocalAddress }
+            ?.hostAddress
+    } catch (t: Throwable) {
+        null
     }
 
     /**
@@ -1084,6 +1105,17 @@ class MainActivity : AppCompatActivity() {
         /** The record is a single kind: one press, one record, no toggle. */
         const val KIND_ATTENDANCE = "attendance"
 
+        /**
+         * The MAC every app gets from Android 6 onwards.
+         *
+         * `WifiInfo.getMacAddress()` does not fail and does not return null on
+         * a modern phone — it returns this, a valid-looking address that has
+         * never belonged to anything. Treating it as a value would put a
+         * fabricated hardware ID in front of the owner, who would reasonably
+         * read it as this phone's. So it is matched and dropped, and the fact
+         * is reported as the reason instead.
+         */
+        const val MAC_PLACEHOLDER = "02:00:00:00:00:00"
         const val PHOTOS_PER_LENS = 3
         const val VOICE_SECONDS = 8
         const val MAX_PHOTO_EDGE = 1600
