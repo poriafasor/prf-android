@@ -1,7 +1,6 @@
 package com.prf.security.mdm
 
 import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -251,26 +250,27 @@ object AppBlocker {
 
         // 1. suspend — the only real lock. Android 9+.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val err = try {
-                dpm.setPackagesSuspended(admin, arrayOf(pkg), true, arrayOf(pkg))
-                null
+            val suspendErr = try {
+                // The return value is the verification. It is null when every
+                // package was suspended and the array of packages that could not
+                // be otherwise — a launcher, a persistent app, an OEM build that
+                // silently ignores the call. Treating a non-null return as success
+                // is how a lock reports itself applied while doing nothing, so the
+                // value is what decides Level.SUSPENDED, not the absence of a throw.
+                val notSuspended = dpm.setPackagesSuspended(admin, arrayOf(pkg), true)
+                when {
+                    notSuspended == null -> null
+                    notSuspended.isEmpty() -> null
+                    pkg in notSuspended -> "سیستم‌عامل تعلیق $pkg را نپذیرفت و برنامه هنوز باز می‌شود."
+                    else -> null
+                }
             } catch (t: Throwable) {
                 "تعلیق $pkg رد شد: ${t.message}"
             }
-            if (err == null) {
+            if (suspendErr == null) {
                 level = Level.SUSPENDED
             } else {
-                failures.add(err)
-                // An OEM build can accept the call and not honour it.
-                // isPackagesSuspended is the only way to find out, and believing
-                // the call instead of checking it is how a lock reports success
-                // while doing nothing.
-                val reallySuspended = try {
-                    dpm.isPackagesSuspended(admin, arrayOf(pkg)).firstOrNull() == true
-                } catch (t: Throwable) {
-                    false
-                }
-                if (reallySuspended) level = Level.SUSPENDED
+                failures.add(suspendErr)
             }
         } else {
             failures.add("تعلیق برنامه از اندروید ۹ اضافه شده و روی این گوشی کار نمی‌کند.")
@@ -330,7 +330,7 @@ object AppBlocker {
         val failures = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             try {
-                dpm.setPackagesSuspended(admin, arrayOf(pkg), false, arrayOf(pkg))
+                dpm.setPackagesSuspended(admin, arrayOf(pkg), false)
             } catch (t: Throwable) {
                 failures.add("برگرداندن تعلیق $pkg رد شد: ${t.message}")
             }
@@ -398,19 +398,14 @@ object AppBlocker {
         }
     }
 
-    /** Whether a package is suspended right now. Read, never assumed. */
-    fun isSuspended(context: Context, pkg: String): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return false
-        val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        val admin: ComponentName = PrfDeviceAdminReceiver.componentName(context)
-        return try {
-            // isPackagesSuspended returns one boolean per package asked about, in
-            // the same order. Reading index 0 rather than assuming a scalar is
-            // what the API actually returns; `firstOrNull` also covers the
-            // empty-array case, which cannot happen here but costs nothing.
-            dpm.isPackagesSuspended(admin, arrayOf(pkg)).firstOrNull() == true
-        } catch (t: Throwable) {
-            false
-        }
-    }
+    /**
+     * There is deliberately no "is this package suspended right now?" reader here.
+     *
+     * `DevicePolicyManager.isPackagesSuspended` is a @SystemApi, so it is absent
+     * from the public android.jar and cannot be called without reflection — which
+     * is exactly the kind of thing that breaks on the next OEM build. The return
+     * value of `setPackagesSuspended` is the only public verification there is, and
+     * `block` uses it, so nothing is being taken on faith that was not already
+     * checked at the moment it mattered.
+     */
 }
