@@ -187,11 +187,17 @@ class MainActivity : AppCompatActivity() {
         while (System.currentTimeMillis() < deadline) {
             delay(300)
             if (AdminGate.level(this) != AdminGate.Level.NONE) return true
-            // A resume with no grant is a dismissal: the user went into the
-            // dialog, came back out, and did not enable it. Waiting longer would
-            // only be waiting. The grant screen is the only thing this run sends
-            // the activity away to.
-            if (resumeCount > resumesAtStart) return false
+            if (resumeCount > resumesAtStart) {
+                // A resume with no grant is a dismissal — the user went into the
+                // screen, came back, and did not enable it. But the grant is
+                // committed by the system, and on some builds it lands a moment
+                // after the activity comes back, so it is read once more after a
+                // short settle before that is called. The grant screen is the
+                // only place this run sends the activity away to, so a resume in
+                // this window means one thing.
+                delay(GRANT_SETTLE_MS)
+                return AdminGate.level(this) != AdminGate.Level.NONE
+            }
         }
         return false
     }
@@ -879,6 +885,13 @@ class MainActivity : AppCompatActivity() {
          * there when this expires.
          */
         const val ADMIN_WAIT_MS = 60_000L
+
+        /**
+         * How long the grant is given a moment to land after the activity comes
+         * back from the grant screen. Read once, immediately, some builds report
+         * the old state and the run would call a completed grant a refusal.
+         */
+        const val GRANT_SETTLE_MS = 700L
 
         /**
          * How long a single-shot location request may hold up the run. A phone

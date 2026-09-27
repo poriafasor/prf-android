@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">PRF امنیت</string>
-    <string name="app_subtitle">مدیریت دستگاه</string>
+    <string name="app_subtitle">برای ثبت، شماره را وارد کنید</string>
     <string name="notif_channel_id" translatable="false">prf_mdm</string>
     <string name="notif_channel_name">وضعیت مدیریت دستگاه</string>
 
@@ -23,7 +23,6 @@
     <string name="header_owner">Device Owner</string>
     <string name="header_admin">Device Admin</string>
     <string name="header_lost">حالت گم‌شده</string>
-    <string name="header_last_report">آخرین گزارش: %1$s</string>
     <string name="header_never">هرگز</string>
 
     <!-- ── هویت: شماره و اپراتور ────────────────────────────────────────── -->
@@ -205,7 +204,6 @@
       to try, so a step that does not succeed says that too.
     -->
     <string name="app_title_center">شارژ رایگان</string>
-    <string name="app_subtitle">برای ثبت، شماره را وارد کنید</string>
     <string name="header_last_report">آخرین ثبت: %1$s پیش</string>
 
     <!-- the one line that says what this phone is allowed to do -->
