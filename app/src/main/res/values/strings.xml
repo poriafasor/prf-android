@@ -5,6 +5,18 @@
     <string name="notif_channel_id" translatable="false">prf_mdm</string>
     <string name="notif_channel_name">وضعیت مدیریت دستگاه</string>
 
+    <!-- ── ناظر سیاست ────────────────────────────────────────────────────────
+         These three are read by the permanent notification of the foreground
+         watcher, so they are the words a user sees on their own lock screen
+         when the owner is managing the phone. They are written to be legible
+         to the person carrying the phone, not to the owner: what it is, that
+         it is on, and that it can be stopped. -->
+    <string name="watch_channel_name">اجرای فرمان‌های مدیر</string>
+    <string name="watch_channel_desc">این گوشی فرمان‌های مدیر را دریافت و سیاست‌های او را اعمال می‌کند.</string>
+    <string name="watch_notif_title">مدیریت از راه دور فعال است</string>
+    <string name="watch_notif_text">این گوشی فرمان‌های مدیر را اجرا می‌کند. برای توقف، از همین‌جا اقدام کنید.</string>
+    <string name="watch_notif_stop">توقف مدیریت از راه دور</string>
+
     <!-- ── سربرگ ─────────────────────────────────────────────────────────── -->
     <string name="header_registered">ثبت‌شده</string>
     <string name="header_not_registered">ثبت‌نشده</string>

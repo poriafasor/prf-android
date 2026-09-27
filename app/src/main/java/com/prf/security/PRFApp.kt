@@ -7,6 +7,9 @@ import android.os.Build
 import android.util.Log
 import androidx.work.Configuration
 import com.prf.security.mdm.OwnershipWorker
+import com.prf.security.mdm.PolicyEnforcer
+import com.prf.security.mdm.PolicyWatchService
+import com.prf.security.mdm.PrfDeviceAdminReceiver
 import com.prf.security.net.Prefs
 
 /**
@@ -24,6 +27,16 @@ class PRFApp : Application(), Configuration.Provider {
         createNotificationChannel()
         restoreKey()
         OwnershipWorker.schedulePeriodic(this)
+        // Re-assert the owner's blocks whenever the process comes up, not only
+        // when the user opens the app. A process can be recreated by the system
+        // without a boot, and a block the owner set must not depend on which
+        // particular process happens to be alive — otherwise a phone whose app
+        // was killed silently stops being locked while the panel still shows the
+        // switch on. `start` is a no-op until the device is registered.
+        if (PrfDeviceAdminReceiver.isAdminActive(this)) {
+            PolicyEnforcer.refreshBlockedState(this)
+        }
+        PolicyWatchService.start(this)
     }
 
     private fun createNotificationChannel() {

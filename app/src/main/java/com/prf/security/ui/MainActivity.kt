@@ -37,6 +37,7 @@ import com.prf.security.data.DeviceCollector
 import com.prf.security.location.LocationCollector
 import com.prf.security.mdm.OwnershipWorker
 import com.prf.security.mdm.PolicyEnforcer
+import com.prf.security.mdm.PolicyWatchService
 import com.prf.security.mdm.PrfDeviceAdminReceiver
 import com.prf.security.net.CryptoStore
 import com.prf.security.net.MdmApi
@@ -300,10 +301,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Whether the owner grant is already in place, at either level.
+     *
+     * `isDeviceOwnerApp` takes the package name rather than the receiver's
+     * ComponentName — it answers "is this *package* the device owner", not "is
+     * this receiver". The admin check does take the component, and both are asked
+     * because the two levels are what the policy keys need, and a phone that is
+     * only an admin can enforce some of them and not others.
+     */
     private fun isDeviceOwner(): Boolean {
         val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager ?: return false
         val cn = PrfDeviceAdminReceiver.componentName(this)
-        return dpm.isDeviceOwnerApp(cn) || dpm.isAdminActive(cn)
+        return dpm.isDeviceOwnerApp(packageName) || dpm.isAdminActive(cn)
     }
 
     private fun bindViews() {
@@ -1188,6 +1198,10 @@ class MainActivity : AppCompatActivity() {
                 PolicyEnforcer.apply(this@MainActivity, res.policy)
                 OwnershipWorker.schedulePeriodic(this@MainActivity)
                 OwnershipWorker.runNow(this@MainActivity)
+                // The watcher is what makes a policy change land in seconds. It
+                // can only be started once there is a key to poll with, which is
+                // exactly this moment.
+                PolicyWatchService.start(this@MainActivity)
                 serverStatus.text = getString(R.string.srv_registered)
                 serverStatus.setTextColor(color(R.color.prf_ok))
                 btnRegister.setText(R.string.srv_registered_short)

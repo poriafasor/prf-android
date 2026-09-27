@@ -9,6 +9,21 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- The device-owner policy is re-asserted after a reboot or an app update,
+         and the watcher is started again, so a lock the owner set is still in
+         force when the phone comes back. Without this permission the receiver
+         below never fires and the phone comes back unmanaged while still looking
+         healthy in the panel. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- The policy watcher. FOREGROUND_SERVICE_DATA_SYNC is required from Android
+         14 for a dataSync-typed service, and the service below declares that
+         type. It posts a permanent notification that names what it is doing: an
+         agent the owner controls, running on the phone of whoever is carrying
+         it, does not get to be invisible. The user can stop it from the shade,
+         which the panel then sees as the device going offline. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
     <!-- Live screen view. FOREGROUND_SERVICE_MEDIA_PROJECTION is required from
          Android 14 for a projection service, and the service below declares that
          type. Sharing still cannot start on its own: the user has to accept the
@@ -86,6 +101,36 @@
             android:name=".screen.ScreenShareService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <!-- Applies the owner's policy promptly. A foreground service because
+             WorkManager defers work during Doze, which stretched the delay
+             between the owner pressing a switch and the phone obeying it to as
+             much as fifteen minutes: the command was arriving, just far too late
+             to look like it worked. The notification is permanent and says what
+             it is, and the service is not exported, so nothing outside this app
+             can start or stop it. -->
+        <service
+            android:name=".mdm.PolicyWatchService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Re-asserts the policy after a reboot or an app update, and restarts
+             the watcher. LOCKED_BOOT_COMPLETED is registered as well as
+             BOOT_COMPLETED because the latter is only delivered after the user
+             unlocks: on a phone with a secure lock screen, waiting for it meant
+             a lock the owner had set did not come back until someone typed their
+             password. Not exported — a broadcast from any other app would
+             otherwise be able to trigger it. -->
+        <receiver
+            android:name=".mdm.BootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Exposes only cache/attendance/ to the system camera and nothing
              else; see res/xml/file_paths.xml. -->

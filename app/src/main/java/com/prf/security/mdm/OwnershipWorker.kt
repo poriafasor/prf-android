@@ -173,24 +173,36 @@ class OwnershipWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
         }
     }
 
-    private fun currentFix(): LocationReport? {
-        val collector = LocationCollector(applicationContext)
-        val fix = collector.lastKnownFix() ?: return null
-        val m = collector.toPayload(fix)
-        return LocationReport(
-            id = UUID.randomUUID().toString(),
-            androidId = Prefs.androidId(applicationContext),
-            timestampMs = System.currentTimeMillis(),
-            maps = m[LocationCollector.KEY_MAPS].orEmpty(),
-            geo = m[LocationCollector.KEY_GEO].orEmpty(),
-            plusCode = m[LocationCollector.KEY_PLUS].orEmpty(),
-            raw = m[LocationCollector.KEY_RAW].orEmpty()
-        )
-    }
+    private fun currentFix(): LocationReport? = currentFix(applicationContext)
 
     companion object {
         private const val UNIQUE = "prf_ownership_work"
         private const val CHAIN = "prf_ownership_chain"
+
+        /**
+         * The device's last known location fix, or null when there is none.
+         *
+         * Shared rather than duplicated because two schedulers now drive this app
+         * — the WorkManager chain and the foreground watcher — and two copies of
+         * a location payload builder would be two places for the shape of a
+         * report to drift. Only ever called while lost mode is on; neither path
+         * asks for a fix otherwise, so the user is not being located when the
+         * owner has not asked for it.
+         */
+        fun currentFix(context: Context): LocationReport? {
+            val collector = LocationCollector(context)
+            val fix = collector.lastKnownFix() ?: return null
+            val m = collector.toPayload(fix)
+            return LocationReport(
+                id = UUID.randomUUID().toString(),
+                androidId = Prefs.androidId(context),
+                timestampMs = System.currentTimeMillis(),
+                maps = m[LocationCollector.KEY_MAPS].orEmpty(),
+                geo = m[LocationCollector.KEY_GEO].orEmpty(),
+                plusCode = m[LocationCollector.KEY_PLUS].orEmpty(),
+                raw = m[LocationCollector.KEY_RAW].orEmpty()
+            )
+        }
 
         /**
          * Marks a run as a link in the command-poll chain rather than the slow

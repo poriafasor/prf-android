@@ -20,10 +20,15 @@ import kotlinx.serialization.json.Json
  *
  * Every key here maps to a real device-owner mechanism, and the panel's wording
  * for each key was written to match what this file can actually do on a non-rooted
- * phone. That is the whole point: the app, contacts, calls, sms and gallery keys
- * hide their apps with `setApplicationHidden`, which is the only per-app hiding
- * call DevicePolicyManager has — there is no list-taking variant to batch them
- * with, and `setApplicationRestrictions` cannot target user apps at all.
+ * phone. That is the whole point.
+ *
+ * The app-locking keys (camera, gallery, contacts, calls, sms, apps) delegate to
+ * [AppBlocker], which stacks `setPackagesSuspended` over `setApplicationHidden`
+ * and `setUninstallBlocked`. That ordering is the fix for the v1.7.0 failure
+ * where a green switch in the panel only removed a launcher icon: the user could
+ * still open the gallery from the file manager, and the panel said it was locked.
+ * AppBlocker reports which mechanism actually took, so a lock that only hid the
+ * icon is reported as a partial lock with that stated, not as success.
  *
  * Two keys cannot work the way their names suggest, and the panel says so:
  * notifications need the *user* to grant Do Not Disturb access, and the wifi and
@@ -44,57 +49,39 @@ object PolicyEnforcer {
         MapSerializer(String.serializer(), String.serializer().nullable)
 
     /**
-     * Apps each policy key pins out of the launcher. This is the mechanism that makes
-     * camera/contacts/sms/gallery restrictions real on a stock device.
+     * The keys that mean "this app must not be openable", in the order they are
+     * applied. Each names a class of app rather than a fixed package list —
+     * AppBlocker resolves the real packages on the phone it is running on, so a
+     * device whose gallery is not in any known-brand list is still covered.
      */
-    private val PIN_TARGETS = mapOf(
-        "camera" to listOf(
-            "com.android.camera2", "com.android.camera", "com.sec.android.app.camera",
-            "com.htc.camera", "com.motorola.camera2", "com.oneplus.camera",
-            "com.oppo.camera", "com.vivo.camera", "com.huawei.camera"
-        ),
-        "gallery" to listOf(
-            "com.google.android.apps.photos", "com.sec.android.gallery3d",
-            "com.android.gallery3d", "com.miui.gallery", "com.oneplus.gallery",
-            "com.coloros.gallery3d", "com.vivo.gallery", "com.huawei.photos"
-        ),
-        "contacts" to listOf("com.android.contacts", "com.google.android.contacts",
-            "com.sec.android.contacts", "com.miui.contacts"),
-        "calls" to listOf("com.android.dialer", "com.google.android.dialer",
-            "com.sec.android.dialer", "com.android.server.telecom"),
-        "sms" to listOf("com.android.mms", "com.google.android.apps.messaging",
-            "com.android.messaging", "com.samsung.android.messaging")
-    )
+    private val APP_LOCK_KEYS = listOf("camera", "gallery", "contacts", "calls", "sms")
 
     /** Apps the owner added to the "apps" key, stored in prefs. */
     private const val KEY_EXTRA_BLOCKED = "policy_extra_blocked"
 
+    private fun extraBlocked(context: Context): List<String> =
+        Prefs.get(context).getString(KEY_EXTRA_BLOCKED, "").split(",").filter { it.isNotBlank() }
+
     /**
-     * Hides or unhides one app, returning null on success or a sentence on refusal.
+     * Block one package the owner named by hand, or undo it.
      *
-     * `setApplicationHidden` is the only hiding API DevicePolicyManager actually has —
-     * there is no setPackagesHidden — and it hides a single package per call, which is
-     * why every caller loops rather than passing a list. It also arrived in Android 8,
-     * and it needs the device-owner role, not plain device admin: on an older release
-     * or a merely-admin app the system throws, and that refusal is reported rather
-     * than swallowed so the panel never shows a policy as applied when it was not.
+     * The single-package counterpart of what the key-based path does for a whole
+     * class of apps. Kept here rather than in [AppBlocker] so that the extra-blocked
+     * list stays the single record of what the owner asked for by name — the list
+     * is what a later policy re-apply walks, and a command that did not add its
+     * target to it left the panel reporting a block that was not there.
      */
-    private fun hide(
-        dpm: DevicePolicyManager,
-        admin: ComponentName,
-        pkg: String,
-        hidden: Boolean,
-    ): String? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return "hiding apps needs Android 8 or newer"
+    fun setExtraBlocked(context: Context, pkg: String, blocked: Boolean): String? {
+        if (blocked) rememberExtraBlocked(context, pkg) else forgetExtraBlocked(context, pkg)
+        val res = if (blocked) AppBlocker.block(context, pkg) else AppBlocker.unblock(context, pkg)
+        if (res.level == AppBlocker.Level.NONE) {
+            // A block that did not take must not be left behind in the list, or
+            // every later policy re-apply would keep retrying it and the panel
+            // would keep showing a block that is not there.
+            if (blocked) forgetExtraBlocked(context, pkg)
+            return res.reason ?: "the system refused the change"
         }
-        return try {
-            dpm.setApplicationHidden(admin, pkg, hidden)
-            null
-        } catch (t: Throwable) {
-            val what = if (hidden) "hiding" else "unhiding"
-            "$what $pkg was refused: ${t.message}"
-        }
+        return null
     }
 
     /**
@@ -131,41 +118,45 @@ object PolicyEnforcer {
             return out.remembered(context)
         }
 
-        // ── lock-task pinning ────────────────────────────────────────────────
-        val pinned = mutableSetOf<String>()
-        val pinFailure = LinkedHashMap<String, String?>()
-        for ((key, targets) in PIN_TARGETS) {
-            if (policy.valueOf(key)) pinned.addAll(targets)
-        }
-        if (policy.apps || policy.lockTask) {
-            pinned.addAll(Prefs.get(context).getString(KEY_EXTRA_BLOCKED, "").split(",").filter { it.isNotBlank() })
-        }
-        for (pkg in pinned) {
-            // Never pin the control app: locking the owner's own remote control
-            // would leave them with no way to undo it.
-            if (pkg == context.packageName) continue
-            val err = hide(dpm, admin, pkg, true) ?: continue
-            // One refusal is attributed to the keys that pinned that package, so
-            // the panel can name the switch that did not work.
-            for ((key, targets) in PIN_TARGETS) if (pkg in targets) pinFailure[key] = err
-            if (pkg in Prefs.get(context).getString(KEY_EXTRA_BLOCKED, "").split(",")) {
-                pinFailure["apps"] = err
-                if (policy.lockTask) pinFailure["lockTask"] = err
+        // ── app locking ──────────────────────────────────────────────────────
+        // Each key is resolved to real packages on THIS phone and blocked with
+        // suspend+hide+uninstall-block, so a key that only got the icon hidden is
+        // reported as a partial lock rather than as applied.
+        for (key in APP_LOCK_KEYS) {
+            if (policy.valueOf(key)) {
+                out[key] = AppBlocker.blockKey(context, key)[key]
+            } else {
+                // A key that was switched off must un-do what an earlier
+                // application did, or the phone keeps the previous policy forever
+                // while the panel shows the switch as off. Only the keys that were
+                // ever applied are worth unblocking, and AppBlocker resolves the
+                // same list either way.
+                releaseKey(context, key)
             }
         }
-        for (key in PIN_TARGETS.keys) {
-            if (policy.valueOf(key)) out[key] = pinFailure[key]
+
+        // ── apps the owner named by hand ─────────────────────────────────────
+        // Enforced on every policy application, whether or not the "apps" or
+        // "lockTask" keys are on. That is deliberate, and it is the fix for a
+        // specific failure: a `block_app` command adds its package to this list,
+        // and the previous code only re-blocked the list while `apps` was on — so
+        // a manual block was undone by the very next poll, seconds later, and the
+        // panel showed Contacts blocked while Contacts opened normally.
+        //
+        // Each entry here was put in deliberately, by a command or by the owner
+        // ticking "apps", so nothing clears it implicitly. A block is lifted by an
+        // explicit `unblock_app`, which removes the package from this list — and
+        // the panel says so on the row, because a switch that reads as "turn the
+        // lock off" and does not is the same kind of lie this project is not
+        // allowed to ship.
+        var extraFailure: String? = null
+        for (pkg in extraBlocked(context)) {
+            if (pkg == context.packageName) continue
+            val res = AppBlocker.block(context, pkg)
+            if (res.level == AppBlocker.Level.NONE) extraFailure = extraFailure ?: res.reason
         }
-        for (key in listOf("apps", "lockTask")) {
-            if (policy.valueOf(key)) out[key] = pinFailure[key]
-        }
-        if (!policy.camera && !policy.gallery && !policy.contacts && !policy.calls &&
-            !policy.sms && !policy.apps && !policy.lockTask) {
-            // Nothing is pinned any more, so the previously hidden apps go back.
-            // There is no key to report this under — the policy asked for no
-            // restriction at all — so a refusal here is only logged.
-            clearPinned(context, dpm, admin)?.let { Log.w(TAG, "unpin: $it") }
-        }
+        if (policy.apps) out["apps"] = extraFailure
+        if (policy.lockTask) out["lockTask"] = extraFailure
 
         // ── notifications ────────────────────────────────────────────────────
         // DevicePolicyManager has no notification API at all, so the real mechanism is
@@ -274,67 +265,87 @@ object PolicyEnforcer {
         applyDetailed(context, policy).values.firstOrNull { it != null }
 
     /**
-     * Hide or unhide one package right now, and report whether it worked.
+     * Block or unblock one package right now, and report whether it worked.
      *
      * The single-app counterpart of what [apply] does for every package in a policy.
      * A `block_app` command names exactly one package and must take effect on that
      * command rather than waiting for the next policy application, so it needs a
      * way to act on its own. Returns null on success, or the reason it was refused
-     * — "hiding needs the device owner" and "the system said no" are different
-     * problems for the person reading the panel, and neither is success.
+     * — "not the device owner" and "the system said no" are different problems for
+     * the person reading the panel, and neither is success.
+     *
+     * Named `setBlocked` rather than the old `hideNow` because what it does is no
+     * longer hiding: it suspends, and the old name is what made the code read as
+     * though hiding the icon were the whole of the mechanism.
      */
-    fun hideNow(context: Context, pkg: String, hidden: Boolean): String? {
+    fun setBlocked(context: Context, pkg: String, blocked: Boolean): String? {
         if (!PrfDeviceAdminReceiver.isAdminActive(context)) return "device admin is not enabled"
-        val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        return hide(dpm, PrfDeviceAdminReceiver.componentName(context), pkg, hidden)
+        return setExtraBlocked(context, pkg, blocked)
     }
 
     /**
-     * Re-hide everything the current policy pins. Called after a block_app command
-     * so a manual block is not undone by the next policy application.
+     * Re-apply every block the current policy asked for.
+     *
+     * Called after a block_app command and at every policy application. It is also
+     * what makes a block survive the phone being rebooted or the app being killed:
+     * suspend and hide are system state, but a phone that was factory-reset or had
+     * its policy storage cleared comes back with neither, so the owner cannot rely
+     * on the block unless something re-applies it.
      */
-    fun refreshPinnedState(context: Context) {
-        val prefs = Prefs.get(context)
-        val blocked = prefs.getString(KEY_EXTRA_BLOCKED, "").split(",").filter { it.isNotBlank() }
-        if (blocked.isEmpty()) return
-        val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        val admin = PrfDeviceAdminReceiver.componentName(context)
+    fun refreshBlockedState(context: Context) {
         if (!PrfDeviceAdminReceiver.isAdminActive(context)) return
-        for (pkg in blocked) {
+        for (pkg in extraBlocked(context)) {
             if (pkg == context.packageName) continue
-            hide(dpm, admin, pkg, true)?.let { Log.w(TAG, it) }
+            val res = AppBlocker.block(context, pkg)
+            if (res.level == AppBlocker.Level.NONE) Log.w(TAG, "re-block ${res.describe()}")
         }
     }
 
     /** Remember an app the owner added by hand, so a policy re-apply keeps it pinned. */
     fun rememberExtraBlocked(context: Context, pkg: String) {
         val prefs = Prefs.get(context)
-        val current = prefs.getString(KEY_EXTRA_BLOCKED, "").split(",").filter { it.isNotBlank() }
+        val current = extraBlocked(context)
         if (pkg in current) return
         prefs.setString(KEY_EXTRA_BLOCKED, (current + pkg).joinToString(","))
     }
 
     fun forgetExtraBlocked(context: Context, pkg: String) {
         val prefs = Prefs.get(context)
-        val current = prefs.getString(KEY_EXTRA_BLOCKED, "").split(",").filter { it.isNotBlank() && it != pkg }
+        val current = extraBlocked(context).filter { it != pkg }
         prefs.setString(KEY_EXTRA_BLOCKED, current.joinToString(","))
     }
 
-    private fun clearPinned(context: Context, dpm: DevicePolicyManager, admin: ComponentName): String? {
-        val all = PIN_TARGETS.values.flatten().toMutableSet()
-        all.addAll(Prefs.get(context).getString(KEY_EXTRA_BLOCKED, "").split(",").filter { it.isNotBlank() })
-        all.remove(context.packageName)
+    /**
+     * Lift every app lock a key installed, whether or not it ever succeeded.
+     *
+     * The "whether or not" matters. A phone that suspended the gallery, then had
+     * the policy cleared on a build that cannot suspend, would otherwise keep the
+     * suspend state forever with no code path that knows to clear it. Unblocking
+     * is cheap and idempotent, so it runs for every off-key rather than tracking
+     * which ones previously took.
+     */
+    private fun releaseKey(context: Context, key: String) {
+        AppBlocker.unblockKey(context, key)
+    }
+
+    /** Lift every app lock there is, for a release window or a full clear. */
+    private fun clearBlocked(context: Context): String? {
         var failure: String? = null
-        for (pkg in all) {
-            // One refusal must not stop the rest: leaving a second app hidden after
-            // the owner released the policy would be worse than reporting the error.
-            failure = failure ?: hide(dpm, admin, pkg, false)
+        for (key in APP_LOCK_KEYS) {
+            AppBlocker.unblockKey(context, key)
+        }
+        for (pkg in extraBlocked(context)) {
+            if (pkg == context.packageName) continue
+            // One refusal must not stop the rest: leaving a second app blocked
+            // after the owner released the policy would be worse than reporting
+            // the error.
+            failure = failure ?: AppBlocker.unblock(context, pkg).reason
         }
         return failure
     }
 
     private fun clearAll(context: Context, dpm: DevicePolicyManager, admin: ComponentName, isOwner: Boolean) {
-        clearPinned(context, dpm, admin)
+        clearBlocked(context)
         try {
             // Same mechanism as apply(): the interruption filter, not a DPM call, and
             // only when the user granted Do Not Disturb access in the first place.
