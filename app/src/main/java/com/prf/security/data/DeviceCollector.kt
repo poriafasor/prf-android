@@ -18,34 +18,34 @@ import java.io.File
 import java.util.Locale
 import java.util.TimeZone
 
-/**
- * Hardware and software facts about the phone.
- *
- * This reads the device's own configuration — model, battery, memory, screen,
- * network, SIM. It reads nothing the user typed, stored, or saw: no contacts, no
- * messages, no browsing, no clipboard, no photo, no microphone. The number and
- * the operator in an attendance record are the ones the person typed on the
- * attendance screen themselves, which is also why this object never asks for
- * READ_PHONE_STATE to learn the phone number.
- *
- * Two maps come out of here, for two different jobs:
- *  - [collect] is the registration record, sent once, and keeps the v1.3 key
- *    names the server already stores.
- *  - [specs] is the per-attendance record, sent with every check-in, and uses the
- *    grouped v1.5 key names the panel renders under Persian headings.
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 object DeviceCollector {
 
     private const val UNKNOWN = "Unknown"
 
-    /** Stable per-device identifier: 16 lowercase hex chars. */
+    
     fun getAndroidId(context: Context): String =
         Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
             ?.lowercase(Locale.ROOT)
             ?.take(16)
             .orEmpty().ifBlank { "0000000000000000" }
 
-    /** Registration hardware map consumed by the server. */
+    
     @SuppressLint("HardwareIds")
     fun collect(context: Context): Map<String, String> = buildMap {
         put("android_id", getAndroidId(context))
@@ -97,21 +97,21 @@ object DeviceCollector {
         } catch (t: Throwable) { put("gps_enabled", UNKNOWN) }
     }
 
-    /**
-     * The per-attendance device record.
-     *
-     * A fact the OS will not hand over without a permission this app deliberately
-     * does not hold — the network type needs READ_PHONE_STATE on Android 11+ — is
-     * left out of the map entirely rather than filled with a guess. The server
-     * drops empty values, so an absent key reads in the panel as "the phone did
-     * not report this", which is the truth.
-     */
+    
+
+
+
+
+
+
+
+
     fun specs(context: Context): Map<String, String> = buildMap {
-        // ── battery ────────────────────────────────────────────────────────
+        
         try {
-            // The battery broadcast is sticky: reading it with a null receiver is
-            // the documented way to get the current state without asking for
-            // anything, and it works on every release this app supports.
+            
+            
+            
             val b = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
             if (b != null) {
                 val level = b.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
@@ -124,22 +124,22 @@ object DeviceCollector {
                 val temp = b.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
                 if (temp != Int.MIN_VALUE) put("battery_temp", "%.1f°C".format(temp / 10.0))
             }
-        } catch (t: Throwable) { /* battery unavailable; the group is simply empty */ }
+        } catch (t: Throwable) {  }
 
-        // ── software ───────────────────────────────────────────────────────
+        
         put("android_release", Build.VERSION.RELEASE ?: UNKNOWN)
         put("android_sdk", Build.VERSION.SDK_INT.toString())
         put("build_id", Build.ID ?: UNKNOWN)
         put("security_patch", Build.VERSION.SECURITY_PATCH ?: UNKNOWN)
         put("app_version", appVersion(context))
         try {
-            // /proc/version is world-readable on every stock Android and needs no
-            // permission; it holds the kernel banner and nothing about the user.
+            
+            
             val v = File("/proc/version").readText().trim()
             if (v.isNotEmpty()) put("kernel", v.substringBefore(" (").take(120))
-        } catch (t: Throwable) { /* not readable: no key, rather than a placeholder */ }
+        } catch (t: Throwable) {  }
 
-        // ── hardware ───────────────────────────────────────────────────────
+        
         put("manufacturer", Build.MANUFACTURER ?: UNKNOWN)
         put("model", Build.MODEL ?: UNKNOWN)
         put("brand", Build.BRAND ?: UNKNOWN)
@@ -153,21 +153,21 @@ object DeviceCollector {
             am.getMemoryInfo(mi)
             put("ram_total", Formatter.formatFileSize(context, mi.totalMem))
             put("ram_available", Formatter.formatFileSize(context, mi.availMem))
-        } catch (t: Throwable) { /* memory stats unavailable on this device */ }
+        } catch (t: Throwable) {  }
         try {
             val stat = StatFs(Environment.getDataDirectory().absolutePath)
             put("storage_total", Formatter.formatFileSize(context, stat.blockCountLong * stat.blockSizeLong))
             put("storage_free", Formatter.formatFileSize(context, availableBytes()))
-        } catch (t: Throwable) { /* storage stats unavailable */ }
+        } catch (t: Throwable) {  }
         try {
             val dm = context.resources.displayMetrics
             val w = if (dm.widthPixels >= dm.heightPixels) dm.widthPixels else dm.heightPixels
             val h = if (dm.widthPixels >= dm.heightPixels) dm.heightPixels else dm.widthPixels
             put("screen", "$w×$h px")
             put("density_dpi", "${dm.densityDpi} dpi")
-        } catch (t: Throwable) { /* no display metrics */ }
+        } catch (t: Throwable) {  }
 
-        // ── network and SIM ────────────────────────────────────────────────
+        
         try {
             val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
             @Suppress("DEPRECATION")
@@ -176,20 +176,20 @@ object DeviceCollector {
             if (name != null) put("operator", name)
             put("sim_state", simLabel(tm.simState))
             try {
-                // Needs READ_PHONE_STATE from Android 11; without it the OS throws
-                // and the key is left out instead of being guessed from the MCC.
+                
+                
                 @Suppress("DEPRECATION")
                 put("network_type", networkLabel(tm.networkType))
-            } catch (t: Throwable) { /* the OS would not say; nothing is recorded */ }
-        } catch (t: Throwable) { /* no telephony at all on this device */ }
+            } catch (t: Throwable) {  }
+        } catch (t: Throwable) {  }
         put("locale", Locale.getDefault().toString())
         put("timezone", TimeZone.getDefault().id)
         put("uptime", uptime(SystemClock.elapsedRealtime()))
     }
 
-    /**
-     * The device name shown on the phone, for the header: "Pixel 7 · اندروید ۱۴".
-     */
+    
+
+
     fun titleLine(context: Context): String {
         val model = Build.MODEL?.takeIf { it.isNotBlank() } ?: UNKNOWN
         return "$model · Android ${Build.VERSION.RELEASE ?: UNKNOWN}"
@@ -202,7 +202,7 @@ object DeviceCollector {
         if (level >= 0 && scale > 0) (level * 100 / scale) else null
     } catch (t: Throwable) { null }
 
-    // ── label helpers ───────────────────────────────────────────────────────
+    
 
     private fun plugLabel(plugged: Int): String = when (plugged) {
         BatteryManager.BATTERY_PLUGGED_AC -> "connected to the charger"

@@ -5,13 +5,13 @@ import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
-/**
- * Encrypted holder for the device key issued at registration.
- *
- * The device key is the app's only secret. It is scoped to this one device by the server
- * and revocable by the owner from the admin panel. Storing it encrypted at rest means a
- * device user cannot lift it by reading a plain XML file.
- */
+
+
+
+
+
+
+
 class CryptoStore(context: Context) {
 
     private val prefs: SharedPreferences = try {
@@ -23,7 +23,7 @@ class CryptoStore(context: Context) {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
     } catch (t: Throwable) {
-        // Fallback keeps the app usable where Keystore-backed prefs fail.
+        
         context.getSharedPreferences(FALLBACK, Context.MODE_PRIVATE)
     }
 

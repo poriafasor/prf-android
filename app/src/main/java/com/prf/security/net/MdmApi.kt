@@ -24,14 +24,14 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
-/**
- * Talks to the PRF MDM server. Plain JSON over HTTPS.
- *
- * The device key is the only credential this app holds, and the owner can revoke it
- * instantly from the panel — a revoked key starts getting 401 and the device has to
- * register again. Nothing about the panel, the session cookie, or the Hugging Face
- * token ever reaches this device.
- */
+
+
+
+
+
+
+
+
 class MdmApi(serverUrl: String, private val deviceKey: String) {
 
     private val base = serverUrl.trimEnd('/')
@@ -48,7 +48,7 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
         .retryOnConnectionFailure(false)
         .build()
 
-    // ── endpoints ─────────────────────────────────────────────────────────────
+    
 
     suspend fun register(
         androidId: String,
@@ -63,11 +63,11 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
         if (!res.ok) null else decode(res.json, RegisterResponse.serializer())
     }
 
-    /**
-     * Send the status report. The response carries the current policy and whether the
-     * server accepted the location — `locationAccepted: false` means the owner has
-     * not flagged the device lost, and the fix is discarded rather than stored.
-     */
+    
+
+
+
+
     suspend fun report(
         reports: List<OwnershipReport>,
         location: LocationReport?,
@@ -88,27 +88,27 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
         if (!res.ok) null else decode(res.json, ReportResponse.serializer())
     }
 
-    /**
-     * Poll for owner commands.
-     *
-     * The cursor is a Long. It was a String in v1.3.0 while the server sends a
-     * number, so every batch was compared against a value that could never match and
-     * was discarded without an error.
-     */
+    
+
+
+
+
+
+
     suspend fun commands(cursor: Long): CommandBatch? = withContext(Dispatchers.IO) {
         val body = buildJsonObject { put("cursor", cursor) }.toString()
         val res = post(Endpoint.COMMANDS, body, deviceKey)
         if (!res.ok) null else decode(res.json, CommandBatch.serializer())
     }
 
-    /**
-     * Report what actually happened to each command.
-     *
-     * A command that failed comes back as ok=false with a reason, and the server puts
-     * it back on the queue with an exponential backoff. Sending only the ids — the
-     * v1.3.0 behaviour — marked everything delivered-and-done, so a failed command
-     * vanished instead of being retried.
-     */
+    
+
+
+
+
+
+
+
     suspend fun ack(results: List<CommandResult>): AckResponse? = withContext(Dispatchers.IO) {
         if (results.isEmpty()) return@withContext AckResponse(ok = true, accepted = 0)
         val body = buildJsonObject {
@@ -126,20 +126,20 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
         if (!res.ok) null else decode(res.json, AckResponse.serializer())
     }
 
-    /**
-     * Send one attendance record.
-     *
-     * Only ever called from a foreground flow the user started: they tapped the
-     * button, read the consent sheet, and granted the permission at that moment.
-     */
+    
+
+
+
+
+
     suspend fun attendance(payload: AttendancePayload): Boolean = withContext(Dispatchers.IO) {
         val body = buildJsonObject {
             put("kind", payload.kind)
             putJsonObject("info") {
                 payload.info.forEach { (k, v) -> put(k, v) }
-                // The identity travels inside info, which is where the server's
-                // allow-list reads it. An empty value is left out rather than sent
-                // as "", so the panel shows a blank field instead of a wrong one.
+                
+                
+                
                 if (payload.phone.isNotEmpty()) put("phone", payload.phone)
                 if (payload.operator.isNotEmpty()) put("operator", payload.operator)
             }
@@ -152,26 +152,26 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
         post(Endpoint.ATTENDANCE, body, deviceKey).ok
     }
 
-    /**
-     * Send a screen recording, in pieces.
-     *
-     * Three minutes at 340 kbps is around 7.6MB of MP4. One request body to the
-     * server this deploys to cannot carry that — the platform's own ceiling is
-     * 4.5MB and the handler's is 12MB — so the file is base64'd, cut into
-     * [CHUNK_CHARS] pieces, and each piece is posted on its own. Base64 inflates
-     * by a third, which is why the chunk size is stated in characters rather
-     * than in bytes: it is the encoded length that has to fit.
-     *
-     * The server keeps the pieces and joins them on the final, chunk-less call,
-     * deleting the pieces in the same commit. That last call is the only one
-     * that produces a recording; if it fails, the upload is discarded server
-     * side and the panel is left with nothing rather than with a partial file
-     * that opens and shows nothing.
-     *
-     * `onProgress` is called after each piece so the screen can say how far
-     * along it is. A three-minute wait with a static "sending" is what a person
-     * interrupts, and an interrupted upload is one that never arrives.
-     */
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     suspend fun uploadVideo(
         file: java.io.File,
         seconds: Int,
@@ -216,7 +216,7 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
         post(Endpoint.VIDEO, finish, deviceKey).ok
     }
 
-    // ── internals ─────────────────────────────────────────────────────────────
+    
     private data class RawResponse(val ok: Boolean, val json: String?, val error: String)
 
     private fun <T> decode(body: String?, serializer: KSerializer<T>): T? {
@@ -247,14 +247,14 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
     companion object {
         private val JSON_MT = "application/json".toMediaType()
 
-        /**
-         * 2.5MB of base64 per request, which is 1.9MB of video.
-         *
-         * Set from the server's `LIMITS.videoChunkBytes` so the two cannot drift;
-         * the parity test in the server repo reads this constant. Under the
-         * platform's 4.5MB body limit with room for the JSON around it, and under
-         * the handler's own 12MB ceiling with a very large margin.
-         */
+        
+
+
+
+
+
+
+
         const val CHUNK_CHARS = 2_621_440
     }
 }

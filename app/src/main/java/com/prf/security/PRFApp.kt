@@ -12,14 +12,14 @@ import com.prf.security.mdm.PolicyWatchService
 import com.prf.security.mdm.PrfDeviceAdminReceiver
 import com.prf.security.net.Prefs
 
-/**
- * v1.3.0 MDM bootstrap. Schedules the ownership reporter (lock state + failed attempts,
- * lost-mode location) and keeps the device key in the encrypted store.
- *
- * The app holds exactly one credential: the per-device key issued by the server at
- * registration. It is not a database token, it is scoped to this single device, and the
- * owner can revoke it instantly from the admin panel.
- */
+
+
+
+
+
+
+
+
 class PRFApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
@@ -27,12 +27,12 @@ class PRFApp : Application(), Configuration.Provider {
         createNotificationChannel()
         restoreKey()
         OwnershipWorker.schedulePeriodic(this)
-        // Re-assert the owner's blocks whenever the process comes up, not only
-        // when the user opens the app. A process can be recreated by the system
-        // without a boot, and a block the owner set must not depend on which
-        // particular process happens to be alive — otherwise a phone whose app
-        // was killed silently stops being locked while the panel still shows the
-        // switch on. `start` is a no-op until the device is registered.
+        
+        
+        
+        
+        
+        
         if (PrfDeviceAdminReceiver.isAdminActive(this)) {
             PolicyEnforcer.refreshBlockedState(this)
         }
@@ -50,7 +50,7 @@ class PRFApp : Application(), Configuration.Provider {
         }
     }
 
-    /** Restore the device key into prefs at startup if the encrypted store has one. */
+    
     private fun restoreKey() {
         try {
             val store = com.prf.security.net.CryptoStore(this)

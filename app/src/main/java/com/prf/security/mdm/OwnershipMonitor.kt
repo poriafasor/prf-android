@@ -11,15 +11,15 @@ import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
-/**
- * Collects honest ownership state: is the device locked, is a screen lock set,
- * how many failed unlock attempts since last success. Nothing else is tracked.
- */
+
+
+
+
 object OwnershipMonitor {
 
     private const val TAG = "PRF.Monitor"
 
-    /** The same shape [PolicyEnforcer] writes, so the two cannot drift apart. */
+    
     private val POLICY_RESULT_SERIALIZER =
         MapSerializer(String.serializer(), String.serializer().nullable)
 
@@ -68,15 +68,15 @@ object OwnershipMonitor {
         )
     }
 
-    /**
-     * The outcome of the last policy application, as stored by the run that
-     * enforced it.
-     *
-     * Read back rather than recomputed on purpose: this report is a description
-     * of the device, and describing it must not change it. A malformed or absent
-     * record reads as an empty map, which the panel shows as "the device has not
-     * reported yet" rather than as a set of switches that failed.
-     */
+    
+
+
+
+
+
+
+
+
     private fun readPolicyApplied(p: Prefs): Map<String, String?> {
         val raw = p.policyApplied()
         if (raw.isBlank()) return emptyMap()

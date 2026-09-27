@@ -8,10 +8,10 @@ import android.content.Intent
 import android.util.Log
 import com.prf.security.net.Prefs
 
-/**
- * Device Admin hook. Lets the owner lock the device and (when Device Owner) wipe it remotely.
- * Everything here is user-visible Android MDM API - no hidden surveillance.
- */
+
+
+
+
 class PrfDeviceAdminReceiver : DeviceAdminReceiver() {
 
     override fun onEnabled(context: Context, intent: Intent) {

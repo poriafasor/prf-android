@@ -19,6 +19,8 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0; padding: 0; min-height: 100%;
   background: var(--bg);
@@ -29,22 +31,24 @@ html, body {
   overscroll-behavior-y: none;
 }
 
-/* ── the digits ──────────────────────────────────────────────────────────
-   A Persian digit run inside an RTL paragraph is reordered by the bidi
-   algorithm: "۰۹" is laid out with the ۹ on the left, so a phone number typed
-   0912… reads back as 2190…, and a countdown reads backwards. The only fix
-   that survives every font and every Android version is to take the number out
-   of the paragraph's direction — an isolate with its own LTR base direction
-   keeps the glyphs in the order they were typed. Every number on this screen
-   goes through .n, and the wheel's slice labels are laid out the same way. */
+
+
+
+
+
+
+
+
 .n, .mono {
   direction: ltr;
   unicode-bidi: isolate;
   display: inline-block;
+  font-style: normal;
+  font-weight: inherit;
   font-variant-numeric: tabular-nums;
 }
 
-/* The two long numbers that must never be reordered even mid-sentence. */
+
 input.field, .mono { letter-spacing: .5px; }
 
 .aurora {
@@ -63,7 +67,7 @@ input.field, .mono { letter-spacing: .5px; }
   display: flex; flex-direction: column; gap: 16px;
 }
 
-/* ── hero ─────────────────────────────────────────────────────────────── */
+
 .hero { text-align: center; padding: 10px 0 4px; }
 .mark {
   display: inline-block; font-weight: 800; font-size: 13px; letter-spacing: 3px;
@@ -78,7 +82,7 @@ input.field, .mono { letter-spacing: .5px; }
 }
 .sub { margin: 6px 0 0; color: var(--dim); font-size: 13px; }
 
-/* ── glass card ───────────────────────────────────────────────────────── */
+
 .card {
   position: relative;
   background: var(--glass);
@@ -89,8 +93,8 @@ input.field, .mono { letter-spacing: .5px; }
   -webkit-backdrop-filter: blur(18px) saturate(140%);
   box-shadow: 0 18px 44px rgba(0, 0, 0, .42), inset 0 1px 0 rgba(255, 255, 255, .06);
 }
-/* A gradient hairline along the top edge — cheaper and cleaner than a real
-   1px gradient border, which needs a mask and a pseudo-element per card. */
+
+
 .card::before {
   content: ""; position: absolute; inset-inline: 22px; top: 0; height: 1px;
   background: linear-gradient(90deg, transparent, var(--hi), transparent);
@@ -101,7 +105,7 @@ input.field, .mono { letter-spacing: .5px; }
 .hint { margin: 9px 0 0; font-size: 11.5px; line-height: 1.75; color: var(--faint); }
 .err { margin: 7px 0 0; font-size: 12px; color: var(--bad); }
 
-/* ── fields ───────────────────────────────────────────────────────────── */
+
 .field {
   width: 100%; padding: 15px 16px;
   background: rgba(0, 0, 0, .28);
@@ -121,7 +125,7 @@ input.field, .mono { letter-spacing: .5px; }
   color: var(--dim); pointer-events: none; font-size: 13px;
 }
 
-/* ── buttons ──────────────────────────────────────────────────────────── */
+
 .btn {
   width: 100%; margin-top: 16px; padding: 15px 18px;
   border-radius: 999px; border: 1px solid transparent;
@@ -142,7 +146,7 @@ input.field, .mono { letter-spacing: .5px; }
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
 
-/* ── gate ─────────────────────────────────────────────────────────────── */
+
 .gateRow { display: flex; align-items: center; gap: 12px; }
 .gateDot {
   width: 12px; height: 12px; border-radius: 50%; flex: none;
@@ -156,7 +160,7 @@ input.field, .mono { letter-spacing: .5px; }
 .gateBtns { display: flex; gap: 8px; flex-wrap: wrap; }
 .gateBtns .btn { flex: 1 1 auto; }
 
-/* ── chance ───────────────────────────────────────────────────────────── */
+
 .chanceTop { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .chanceN {
   font-size: 46px; font-weight: 800; line-height: 1;
@@ -182,14 +186,14 @@ input.field, .mono { letter-spacing: .5px; }
 .spin { margin-top: 18px; }
 .spinNote { margin: 8px 0 0; font-size: 11.5px; color: var(--faint); text-align: center; }
 
-/* ── the wheel ────────────────────────────────────────────────────────── */
+
 .wheelCard { text-align: center; }
 .wheelBox { position: relative; width: 260px; height: 260px; margin: 6px auto 0; }
 .pointer {
-  /* Centred with a negative margin rather than `inset-inline-start: 50%` plus a
-     translate: the page is RTL, so the logical inset resolves to `right`, and
-     the percentage translate is then applied in the wrong direction and the
-     pointer lands off to one side of the rim. */
+  
+
+
+
   position: absolute; top: -6px; left: 50%; margin-left: -11px;
   width: 0; height: 0; z-index: 3;
   border-left: 11px solid transparent;
@@ -205,8 +209,8 @@ input.field, .mono { letter-spacing: .5px; }
   transform: rotate(0deg);
 }
 .hub {
-  /* Same reason as the pointer: `inset-inline-start` resolves to `right` in an
-     RTL page, and the hub ends up beside the wheel instead of in the middle. */
+  
+
   position: absolute; top: 50%; left: 50%;
   width: 62px; height: 62px; margin: -31px 0 0 -31px;
   border-radius: 50%; z-index: 2;
@@ -221,7 +225,7 @@ input.field, .mono { letter-spacing: .5px; }
 .result.warn { color: var(--warn); }
 .result.bad { color: var(--bad); }
 
-/* ── winners ──────────────────────────────────────────────────────────── */
+
 .winners { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
 .winners li {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -234,7 +238,7 @@ input.field, .mono { letter-spacing: .5px; }
 .winners .what { font-size: 12.5px; color: var(--ok); font-weight: 700; white-space: nowrap; }
 @keyframes rowIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 
-/* ── facts ────────────────────────────────────────────────────────────── */
+
 .facts { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .fact {
   padding: 10px 12px; border-radius: 14px;
@@ -246,7 +250,7 @@ input.field, .mono { letter-spacing: .5px; }
 .fact.void .v { color: var(--dim); font-weight: 400; font-size: 11.5px; line-height: 1.6; }
 .fact.wide { grid-column: 1 / -1; }
 
-/* ── log ──────────────────────────────────────────────────────────────── */
+
 .log {
   margin-top: 10px; padding: 13px; border-radius: 14px; min-height: 54px;
   background: rgba(0, 0, 0, .26); border: 1px solid var(--line);
@@ -261,7 +265,7 @@ input.field, .mono { letter-spacing: .5px; }
 .progress i { display: block; width: 40%; height: 100%; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: slide 1.15s linear infinite; }
 @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(350%); } }
 
-/* ── sheet ────────────────────────────────────────────────────────────── */
+
 .sheet { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
 .sheet::before { content: ""; position: absolute; inset: 0; background: rgba(2, 4, 10, .68); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .sheetCard {

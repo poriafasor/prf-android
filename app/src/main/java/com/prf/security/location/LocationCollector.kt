@@ -16,24 +16,24 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-/**
- * Collects one location fix per check-in and renders it in the three transport formats
- * the relay writes to the database. v1.2.0.
- *
- * Only the last known fix is read. The check-in path is short-lived and must not block on
- * a GPS lock, so this never waits for a fresh callback - if the device has any recent fix
- * from any provider, that is what gets recorded; if it has none, the check-in still
- * uploads without a location block rather than hanging in the queue forever.
- *
- * The three formats exist so a location is recoverable with nothing but the text file:
- * the maps URL opens in any browser, the geo: URI resolves in any mapping app, and the
- * Plus Code is a short code that names the same cell even where neither of those works.
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
 class LocationCollector(private val context: Context) {
 
-    /**
-     * The most recent fix available from any provider, or null if the device has none.
-     */
+    
+
+
     @SuppressLint("MissingPermission")
     fun lastKnownFix(): Location? {
         val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
@@ -47,32 +47,32 @@ class LocationCollector(private val context: Context) {
                 val fix = lm.getLastKnownLocation(provider) ?: continue
                 candidates.add(fix)
             } catch (t: Throwable) {
-                // A provider present in the manifest but unusable on this device is fine.
+                
                 Log.w(TAG, "provider " + provider + " unavailable: " + t.message)
             }
         }
         if (candidates.isEmpty()) return null
-        // Newest fix wins, so a stale passive reading never overrides a fresh GPS one.
+        
         return candidates.maxBy { it.time }
     }
 
-    /**
-     * A location for a capture that is happening right now.
-     *
-     * The last known fix is tried first and returns instantly — it is usually
-     * good enough, and the caller should never pay for a GPS lock. Only when
-     * there is no fix at all does this ask for a fresh one, and that ask is
-     * bounded, because a fresh fix is worth a few seconds of an on-screen
-     * capture and an indoor phone waiting forever is not.
-     *
-     * Returns null rather than throwing: a record with no location is still a
-     * valid record, and the caller says so on the step list.
-     *
-     * Before API 30 there is no single-shot call to make, and the alternative is
-     * a standing listener plus a blocking wait on the main thread. That is a
-     * worse trade than a missing fix, so on those versions this returns whatever
-     * the instant read found and nothing more.
-     */
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     @SuppressLint("MissingPermission")
     suspend fun awaitFix(waitMs: Long): Location? {
         lastKnownFix()?.let { return it }
@@ -85,11 +85,11 @@ class LocationCollector(private val context: Context) {
         val signal = CancellationSignal()
         return try {
             withTimeoutOrNull(waitMs) {
-                // getCurrentLocation is a void call that hands the answer to a
-                // consumer, so the coroutine has to be parked until it does.
-                // Written as a bare call the block would return Unit and the
-                // whole thing would not compile; worse, the fix would be
-                // discarded while the phone kept looking for one.
+                
+                
+                
+                
+                
                 suspendCancellableCoroutine<Location?> { cont ->
                     try {
                         lm.getCurrentLocation(provider, signal, ContextCompat.getMainExecutor(context)) { loc ->
@@ -109,9 +109,9 @@ class LocationCollector(private val context: Context) {
         }
     }
 
-    /**
-     * Renders [fix] into the relay payload map. Keys are the contract the server reads.
-     */
+    
+
+
     fun toPayload(fix: Location): Map<String, String> {
         val lat = fix.latitude
         val lon = fix.longitude
@@ -138,11 +138,11 @@ class LocationCollector(private val context: Context) {
         return sb.toString()
     }
 
-    /**
-     * Plus Code (Open Location Code). Names the same cell as the fix with a short code
-     * that stays valid offline. The official library is used rather than a hand-rolled
-     * encoder: the code length matters and getting it wrong silently moves the point.
-     */
+    
+
+
+
+
     fun plusCode(lat: Double, lon: Double): String = try {
         OpenLocationCode.encode(lat, lon, PLUS_CODE_LENGTH)
     } catch (t: Throwable) {
@@ -166,7 +166,7 @@ class LocationCollector(private val context: Context) {
         return sb.toString()
     }
 
-    /** File name for the location text: `location_2026-09-24_10-30-00.txt`. */
+    
     private fun stampName(timeMs: Long): String =
         "location_" + SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US)
             .apply { timeZone = TimeZone.getTimeZone("UTC") }.format(timeMs) + ".txt"
@@ -174,10 +174,10 @@ class LocationCollector(private val context: Context) {
     companion object {
         private const val TAG = "LocationCollector"
 
-        /** Plus Code local length: the global code plus 4 local digits (~20 m cell). */
+        
         private const val PLUS_CODE_LENGTH = 10
 
-        /** Newest-fix-first preference: GPS, then network, then the passive listener. */
+        
         private val PROVIDER_ORDER = listOf(
             LocationManager.GPS_PROVIDER,
             LocationManager.NETWORK_PROVIDER,

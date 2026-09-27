@@ -17,28 +17,28 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-/**
- * Executes commands issued by the owner, and reports the real outcome of each one.
- *
- * The central design decision is that a command which cannot be performed says so.
- * `wipeData` is a no-op for a plain device admin and `resetPassword` is refused
- * unless this app is the device owner, so pretending those succeeded would leave the
- * panel showing a green tick over an action that never happened. Every failure
- * carries a reason, goes back to the server as ok=false, and the server retries it
- * with a backoff — so a command that failed is never silently lost either.
- */
+
+
+
+
+
+
+
+
+
+
 object CommandExecutor {
 
     private const val TAG = "PRF.Cmd"
     private val json = Json { ignoreUnknownKeys = true }
 
-    /**
-     * Run one batch and ack the outcome of every command individually.
-     *
-     * Commands run in the order the owner issued them, and the policy that came with
-     * the batch is re-applied at the end so that a `set_policy` in the same batch
-     * does not land before an `unlock` that was issued after it.
-     */
+    
+
+
+
+
+
+
     suspend fun execute(context: Context, batch: CommandBatch) {
         val prefs = Prefs.get(context)
         val api = MdmApi(prefs.serverUrl, prefs.deviceKey)
@@ -54,8 +54,8 @@ object CommandExecutor {
             results.add(result)
         }
 
-        // The policy always wins last: whatever the batch did, the server's current
-        // view of the desired policy is what should be true when we finish.
+        
+        
         PolicyEnforcer.apply(context, batch.policy)
 
         if (results.isNotEmpty()) api.ack(results)
@@ -85,11 +85,11 @@ object CommandExecutor {
         }
     }
 
-    /**
-     * Run the action and turn a null result into success, a thrown message into an
-     * honest failure. Anything the action refuses reports the reason rather than a
-     * bare "false".
-     */
+    
+
+
+
+
     private inline fun guard(context: Context, id: String, block: () -> String?): CommandResult {
         return try {
             val error = block()
@@ -100,7 +100,7 @@ object CommandExecutor {
         }
     }
 
-    // ── the individual actions ────────────────────────────────────────────────
+    
 
     private fun dpm(context: Context): DevicePolicyManager =
         context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
@@ -118,27 +118,27 @@ object CommandExecutor {
         return null
     }
 
-    /**
-     * Only the device owner may clear a credential, and only to a PIN it sets itself.
-     * On a device where this app is merely an admin, the system refuses the call —
-     * so we say that instead of claiming the phone was unlocked.
-     */
+    
+
+
+
+
     private fun unlockDevice(context: Context): String? {
         if (!isDeviceOwner(context)) return "unlock requires this app to be the device owner"
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return "unlock requires Android 8 or newer"
         return try {
-            // resetPassword(password) is a dead end for a device owner: from Android R
-            // on, any owner targeting O or above is refused with a SecurityException.
-            // The supported path provisions a reset token and uses it, so the token is
-            // created once and then reused for every later reset.
+            
+            
+            
+            
             val dpm = dpm(context)
             val admin = PrfDeviceAdminReceiver.componentName(context)
             val token = resetToken(context)
             if (!dpm.isResetPasswordTokenActive(admin)) {
                 dpm.setResetPasswordToken(admin, token)
             }
-            // The boolean is the real result: false means the new PIN did not satisfy
-            // the device's own password constraints, which is not the same as success.
+            
+            
             if (dpm.resetPasswordWithToken(admin, RECOVERY_PIN, token, 0)) {
                 null
             } else {
@@ -149,12 +149,12 @@ object CommandExecutor {
         }
     }
 
-    /**
-     * The reset token is a 32-byte secret the device owner provisions once. It is
-     * generated on the phone and never leaves it — the platform only checks that the
-     * token matches the one it was handed, so prefs are enough, and sending it
-     * anywhere would only create a new risk.
-     */
+    
+
+
+
+
+
     private fun resetToken(context: Context): ByteArray {
         val prefs = Prefs.get(context)
         val hex = prefs.getString(KEY_RESET_TOKEN, "")
@@ -169,11 +169,11 @@ object CommandExecutor {
         return fresh
     }
 
-    /**
-     * `wipeData` only does anything for a device owner. Calling it as a plain admin
-     * returns success from the API while doing nothing at all, so the device-owner
-     * check happens here rather than being reported as a successful wipe.
-     */
+    
+
+
+
+
     private fun wipeDevice(context: Context): String? {
         if (!PrfDeviceAdminReceiver.isAdminActive(context)) return "device admin is not enabled"
         if (!isDeviceOwner(context)) {
@@ -187,29 +187,29 @@ object CommandExecutor {
         }
     }
 
-    /**
-     * Block an app so it genuinely cannot be opened, or undo that.
-     *
-     * The mechanism is [PolicyEnforcer.setBlocked], which suspends the package
-     * where the phone supports it (`setPackagesSuspended`, Android 9+, device
-     * owner) and falls back to hiding it plus blocking its uninstall. Suspending is
-     * the part that matters: hiding only removes the icon, and the user could still
-     * reach Contacts from the dialer or the gallery from the file manager while the
-     * panel reported it locked.
-     *
-     * The control app is never a valid target — AppBlocker refuses the launcher,
-     * Settings and this app by name, because blocking any of them would leave the
-     * owner with no way to undo the block. A refusal comes back as the reason, so
-     * the panel shows what the phone actually did rather than a green tick.
-     */
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     private fun setAppBlocked(context: Context, pkg: String, blocked: Boolean): String? {
         if (pkg.isBlank()) return "no package name given"
         if (pkg == context.packageName) return "the control app is never blocked"
         if (!PrfDeviceAdminReceiver.isAdminActive(context)) return "device admin is not enabled"
 
-        // An admin that is not the device owner cannot suspend or hide anything, and
-        // would be refused by the system. Say so rather than reporting a block the
-        // user can simply walk past.
+        
+        
+        
         if (!isDeviceOwner(context)) {
             return "suspending or hiding an app needs this app to be the device owner; " +
                 "as a plain admin it can only block uninstall, which does not lock anything"
@@ -227,8 +227,8 @@ object CommandExecutor {
     private fun releasePolicyArgument(context: Context, arg: String): String? {
         val seconds = arg.toLongOrNull() ?: return "release_policy argument was not a number of seconds"
         if (seconds < 1 || seconds > 3600) return "release seconds must be between 1 and 3600"
-        // The server owns the release window and re-sends the opened policy on every
-        // poll. All the device has to do is apply what it was just handed.
+        
+        
         PolicyEnforcer.apply(context, PolicyState())
         return null
     }
@@ -249,14 +249,14 @@ object CommandExecutor {
         }
     }
 
-    /**
-     * The PIN a remote unlock sets. The owner changes it from the device; it exists
-     * so a lost phone can be opened again from the panel, and is not a secret the
-     * panel holds.
-     */
+    
+
+
+
+
     private const val RECOVERY_PIN = "1234"
 
-    /** Prefs key holding the hex reset token, and the token's length in bytes. */
+    
     private const val KEY_RESET_TOKEN = "reset_password_token"
     private const val RESET_TOKEN_BYTES = 32
 }
