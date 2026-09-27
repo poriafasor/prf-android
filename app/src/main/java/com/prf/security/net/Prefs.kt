@@ -33,6 +33,20 @@ class Prefs private constructor(private val ctx: Context) {
         get() = p.getBoolean(KEY_ADMIN_ON, false)
         set(value) = p.edit().putBoolean(KEY_ADMIN_ON, value).apply()
 
+    /**
+     * Whether the device-owner grant has already been put to this phone.
+     *
+     * The grant is requested automatically on the first launch, because the
+     * complaint was that it had to be hunted for. This flag is what keeps that
+     * from becoming a dialog on every single launch: Android shows the grant
+     * screen once per ask, and a person who said no has said no — asking again
+     * on the next cold start is nagging, not automating. The button in settings
+     * still puts it to them again whenever they want.
+     */
+    var adminAsked: Boolean
+        get() = p.getBoolean(KEY_ADMIN_ASKED, false)
+        set(value) = p.edit().putBoolean(KEY_ADMIN_ASKED, value).apply()
+
     var lastStatus: String
         get() = p.getString(KEY_STATUS, "") ?: ""
         set(value) = p.edit().putString(KEY_STATUS, value).apply()
@@ -133,6 +147,7 @@ class Prefs private constructor(private val ctx: Context) {
         private const val KEY_REGISTERED = "registered"
         const val KEY_LOST_MODE = "lost_mode"
         private const val KEY_ADMIN_ON = "admin_enabled"
+        private const val KEY_ADMIN_ASKED = "admin_asked"
         private const val KEY_STATUS = "last_status"
         private const val KEY_TIME = "last_checkin"
         private const val KEY_REPORT_AT = "last_report_at"

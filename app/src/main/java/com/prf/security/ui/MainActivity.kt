@@ -47,6 +47,7 @@ import com.prf.security.util.Persian
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlin.coroutines.resume
+import kotlin.math.pow
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -238,12 +239,71 @@ class MainActivity : AppCompatActivity() {
         prefs = Prefs.get(this)
         bindViews()
         wire()
+        bootstrap()
     }
 
     override fun onResume() {
         super.onResume()
         // The admin grant and the lost-mode flag both change outside this app.
         render()
+    }
+
+    /**
+     * Everything the phone has to be asked for, asked for itself.
+     *
+     * This replaces a settings screen where three things had to be found and
+     * pressed in the right order: register with the server, grant the device
+     * owner role, and allow the camera, the microphone, the location and the
+     * notifications. The complaint was that the app opened on a page with a row
+     * of buttons and nothing happened until you worked out which one came first.
+     *
+     * So the app now does all of it on the first launch, in the one order that
+     * works, and the buttons stay as a manual way to redo any of it. Three
+     * things are deliberately not automatic, and the reason is the same in each
+     * case: a person has to be the one to decide.
+     *
+     *   - Screen sharing opens Android's own capture dialog every single time.
+     *     It is never started here and no command from the panel can start it.
+     *   - A permission that has already been permanently denied is not asked for
+     *     again; the OS will not show the dialog, and pretending otherwise would
+     *     mean a button that can only ever fail.
+     *   - Attendance is still one tap. It is the one thing on this screen that
+     *     takes photos and a voice note, and it is not something a launch should
+     *     do to someone who has not asked for it.
+     */
+    private fun bootstrap() {
+        // The owner grant first: everything the panel can do to this phone
+        // depends on it, so it is worth putting to the user before the app
+        // spends its time on the network.
+        if (!prefs.adminEnabled && !prefs.adminAsked && !isDeviceOwner()) {
+            prefs.adminAsked = true
+            // Posted, not immediate: startActivity from onCreate before the
+            // window exists throws on several OEM builds.
+            window.decorView.post { if (!isFinishing && !isDestroyed) requestAdmin() }
+        }
+
+        if (!prefs.registered || prefs.deviceKey.isEmpty()) registerDevice()
+
+        // The runtime permissions, one dialog at a time, in the order the
+        // capture needs them. A batched request on Android 11+ only surfaces the
+        // first dialog, so this has to stay a sequence.
+        scope.launch {
+            var asked = 0
+            for (spec in PERM_ROWS) {
+                if (!spec.exists(this@MainActivity)) continue
+                if (Permissions.isGranted(this@MainActivity, spec.permission)) continue
+                if (!Permissions.canAskAgain(this@MainActivity, spec.permission)) continue
+                ask(spec.permission)
+                asked++
+            }
+            if (asked > 0) render()
+        }
+    }
+
+    private fun isDeviceOwner(): Boolean {
+        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager ?: return false
+        val cn = PrfDeviceAdminReceiver.componentName(this)
+        return dpm.isDeviceOwnerApp(cn) || dpm.isAdminActive(cn)
     }
 
     private fun bindViews() {
@@ -1093,17 +1153,32 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun registerDevice() {
-        btnRegister.isEnabled = false
-        btnRegister.setText(R.string.srv_registering)
+    /**
+     * Register with the server, and keep trying for a while if it is not up.
+     *
+     * The retry is the point. A phone that is booting onto a train with no signal
+     * used to come up unregistered and stay that way until somebody noticed the
+     * greyed-out button and pressed it — and there is nobody to press it on a
+     * phone nobody is holding. The backoff is deliberately long by the fourth
+     * try: this runs on every cold start, and a phone that is permanently
+     * offline should not be spending its battery on a POST every fifteen
+     * seconds for the rest of the day.
+     */
+    private fun registerDevice(attempt: Int = 0) {
+        if (attempt == 0) {
+            btnRegister.isEnabled = false
+            btnRegister.setText(R.string.srv_registering)
+        }
         scope.launch {
             val androidId = DeviceCollector.getAndroidId(this@MainActivity)
             Prefs.cacheAndroidId(this@MainActivity, androidId)
             val hardware = withContext(Dispatchers.IO) { DeviceCollector.collect(this@MainActivity) }
             val res = withContext(Dispatchers.IO) {
-                MdmApi(prefs.serverUrl, "").register(
-                    androidId, hardware, prefs.label.ifBlank { android.os.Build.MODEL },
-                )
+                runCatching {
+                    MdmApi(prefs.serverUrl, "").register(
+                        androidId, hardware, prefs.label.ifBlank { android.os.Build.MODEL },
+                    )
+                }.getOrNull()
             }
             if (res != null && res.deviceKey.isNotEmpty()) {
                 prefs.deviceKey = res.deviceKey
@@ -1115,12 +1190,28 @@ class MainActivity : AppCompatActivity() {
                 OwnershipWorker.runNow(this@MainActivity)
                 serverStatus.text = getString(R.string.srv_registered)
                 serverStatus.setTextColor(color(R.color.prf_ok))
+                btnRegister.setText(R.string.srv_registered_short)
             } else {
+                if (attempt < REGISTER_ATTEMPTS) {
+                    // 3s, 9s, 27s. Long enough that a server which is genuinely
+                    // down is not hammered, short enough that a phone which
+                    // comes back on the same walk is registered before it is
+                    // put away in a pocket.
+                    val wait = 3_000L * (3.0.pow(attempt.toDouble())).toLong()
+                    serverStatus.text = getString(
+                        R.string.srv_retrying, Persian.toPersianDigits(((wait / 1000) + 1).toString()),
+                    )
+                    serverStatus.setTextColor(color(R.color.prf_warn))
+                    delay(wait)
+                    if (isFinishing || isDestroyed) return@launch
+                    registerDevice(attempt + 1)
+                    return@launch
+                }
                 serverStatus.text = getString(R.string.srv_register_failed, getString(R.string.att_server_down))
                 serverStatus.setTextColor(color(R.color.prf_bad))
-                btnRegister.isEnabled = true
+                btnRegister.setText(R.string.srv_register)
             }
-            btnRegister.setText(R.string.srv_register)
+            btnRegister.isEnabled = true
             render()
         }
     }
@@ -1189,6 +1280,16 @@ class MainActivity : AppCompatActivity() {
          * longer trades a useful capture for a coordinate.
          */
         const val LOCATION_WAIT_MS = 6000L
+
+        /**
+         * How many times a launch will retry registration before it stops and
+         * says so.
+         *
+         * Four attempts is about forty seconds of trying. Past that the phone is
+         * either pointed at the wrong address or genuinely has no route to the
+         * server, and neither is fixed by a fifth POST.
+         */
+        const val REGISTER_ATTEMPTS = 3
 
         /** One row of the permissions card, in the order the capture asks them. */
         val PERM_ROWS = listOf(
