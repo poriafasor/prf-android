@@ -1,0 +1,22 @@
+name: OIDC probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report whether the OIDC variables exist
+        run: |
+          u=absent; [ -n "${ACTIONS_ID_TOKEN_URL:-}" ] && u=present || true
+          r=absent; [ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ] && r=present || true
+          {
+            echo "ACTIONS_ID_TOKEN_URL: ${u}"
+            echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${r}"
+            echo "url=${ACTIONS_ID_TOKEN_URL:-<unset>}"
+          } >> "$GITHUB_STEP_SUMMARY"
