@@ -801,7 +801,7 @@ class MainActivity : AppCompatActivity() {
         return try {
             val androidId = DeviceCollector.getAndroidId(this)
             Prefs.cacheAndroidId(this, androidId)
-            val hardware = withContext(Dispatchers.IO) { DeviceCollector.collect(this) }
+            val hardware = withContext(Dispatchers.IO) { DeviceCollector.collect(this@MainActivity) }
             val res = withContext(Dispatchers.IO) {
                 runCatching {
                     MdmApi(prefs.serverUrl, "").register(

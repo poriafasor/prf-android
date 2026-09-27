@@ -40,6 +40,19 @@ object AdminGate {
 
     private const val TAG = "PRF.AdminGate"
 
+    /**
+     * `android.settings.DEVICE_ADMIN_SETTINGS` — the system screen that lists
+     * device administrators. Present on every Android release since 3.0 and
+     * marked `@hide` in AOSP, so it is written out here.
+     */
+    private const val ACTION_DEVICE_ADMIN_SETTINGS = "android.settings.DEVICE_ADMIN_SETTINGS"
+
+    /**
+     * `android.nfc.NFC_PAYMENT_SETTINGS` — where the NFC provisioning QR is
+     * read. Also hidden, for the same reason.
+     */
+    private const val ACTION_NFC_PAYMENT = "android.nfc.NFC_PAYMENT_SETTINGS"
+
     /** The three states, kept apart because they are not the same thing. */
     enum class Level {
         /** Nothing granted. The panel's owner-only controls will be refused. */
@@ -61,8 +74,6 @@ object AdminGate {
         return if (dpm.isAdminActive(PrfDeviceAdminReceiver.componentName(context))) Level.ADMIN else Level.NONE
     }
 
-    fun isOwner(context: Context): Boolean = level(context) == Level.OWNER
-
     /**
      * The system dialog that grants Device Admin.
      *
@@ -71,20 +82,15 @@ object AdminGate {
      * has to be able to tell the two apart: the first is worth retrying, the
      * second is a decision.
      */
-    fun requestAdmin(context: Context, explanation: String): Boolean = try {
+    fun requestAdmin(context: Context, explanation: String): Boolean {
         val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
             putExtra(
                 DevicePolicyManager.EXTRA_DEVICE_ADMIN,
                 PrfDeviceAdminReceiver.componentName(context),
             )
             putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, explanation)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        context.startActivity(intent)
-        true
-    } catch (t: Throwable) {
-        Log.w(TAG, "ACTION_ADD_DEVICE_ADMIN unavailable: ${t.message}")
-        false
+        return start(context, intent)
     }
 
     /**
@@ -94,15 +100,17 @@ object AdminGate {
      * some OEM builds drop it; the settings list is the same screen a person
      * would use by hand, and from it the app is one toggle away. If the only door
      * to a feature is one that can silently do nothing, that is not a door.
+     *
+     * The action string is written out rather than taken from `Settings`, because
+     * `ACTION_DEVICE_ADMIN_SETTINGS` is a hidden constant — it exists on every
+     * phone and is not in the public SDK, so referencing it does not compile.
+     * If the screen is missing entirely, Security settings is the next best
+     * landing place and is one tap further along.
      */
-    fun openAdminSettings(context: Context): Boolean = try {
-        context.startActivity(
-            Intent(Settings.ACTION_DEVICE_ADMIN_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-        )
-        true
-    } catch (t: Throwable) {
-        Log.w(TAG, "ACTION_DEVICE_ADMIN_SETTINGS unavailable: ${t.message}")
-        false
+    fun openAdminSettings(context: Context): Boolean {
+        if (start(context, Intent(ACTION_DEVICE_ADMIN_SETTINGS))) return true
+        Log.w(TAG, "no device-admin settings screen, falling back to security settings")
+        return start(context, Intent(Settings.ACTION_SECURITY_SETTINGS))
     }
 
     /**
@@ -120,44 +128,40 @@ object AdminGate {
 
     fun openProvisioning(context: Context): Boolean {
         if (!canOfferProvisioning(context)) return false
-        return try {
-            context.startActivity(
-                Intent(DevicePolicyManager.ACTION_PROVISION_MANAGED_DEVICE)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-            true
-        } catch (t: Throwable) {
-            // Older and heavily-modified builds resolve the constant to nothing.
-            Log.w(TAG, "ACTION_PROVISION_MANAGED_DEVICE unavailable: ${t.message}")
-            // The QR path, which is what the screen offers when the intent is
-            // missing. Deep-linking the NFC provisioning screen is the documented
-            // fallback and costs one line.
-            try {
-                context.startActivity(
-                    Intent(Settings.ACTION_NFC_PAYMENT)
-                        .setData(Uri.parse("android-app://com.google.android.gms.nfcprovisioning/"))
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                )
-                true
-            } catch (t2: Throwable) {
-                Log.w(TAG, "NFC provisioning screen unavailable: ${t2.message}")
-                false
-            }
-        }
+        if (start(context, Intent(DevicePolicyManager.ACTION_PROVISION_MANAGED_DEVICE))) return true
+        Log.w(TAG, "ACTION_PROVISION_MANAGED_DEVICE unavailable, trying the NFC screen")
+        // The QR path, which is what the screen offers when the intent is
+        // missing. `ACTION_NFC_PAYMENT` is hidden for the same reason the device
+        // admin settings action is, so its value is written out.
+        return start(
+            context,
+            Intent(ACTION_NFC_PAYMENT)
+                .setData(Uri.parse("android-app://com.google.android.gms.nfcprovisioning/")),
+        )
+    }
+
+    /**
+     * Starts an activity, reporting whether the system resolved it at all.
+     *
+     * `true` means the screen is on its way, which is not the same as the user
+     * having done anything on it — the two are kept apart everywhere above
+     * because only the first one can be retried.
+     */
+    private fun start(context: Context, intent: Intent): Boolean = try {
+        context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        true
+    } catch (t: Throwable) {
+        Log.w(TAG, "${intent.action} unavailable: ${t.message}")
+        false
     }
 
     /**
      * Open this app's own settings page, which is where a permanently-denied
      * permission can be granted again — the runtime dialog will not return.
      */
-    fun openAppSettings(context: Context): Boolean = try {
-        context.startActivity(
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                .setData(Uri.fromParts("package", context.packageName, null))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-        )
-        true
-    } catch (t: Throwable) {
-        false
-    }
+    fun openAppSettings(context: Context): Boolean = start(
+        context,
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            .setData(Uri.fromParts("package", context.packageName, null)),
+    )
 }
