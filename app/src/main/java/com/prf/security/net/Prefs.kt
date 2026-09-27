@@ -194,7 +194,16 @@ class Prefs private constructor(private val ctx: Context) {
         private const val KEY_VIDEOS = "videos_saved"
         private const val KEY_UNIT_AT = "chance_last_unit_at"
 
-        const val DEFAULT_SERVER = Endpoint.defaultServer
+        /**
+         * The server this build talks to until an owner changes it.
+         *
+         * Not `const`: the value comes out of [Endpoint], which assembles it at
+         * class-load time precisely so the address is not sitting in the binary
+         * as plain text, and a compile-time constant cannot be the result of a
+         * function call. That is the trade — the address costs one object
+         * initialisation instead of being free.
+         */
+        val DEFAULT_SERVER: String = Endpoint.defaultServer
 
         @Volatile private var instance: Prefs? = null
 

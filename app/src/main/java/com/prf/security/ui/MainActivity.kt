@@ -20,6 +20,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.prf.security.R
 import com.prf.security.data.AttendancePayload
 import com.prf.security.data.DeviceCollector
 import com.prf.security.data.LocationReport
