@@ -381,14 +381,16 @@ class MainActivity : AppCompatActivity() {
     private fun renderTicker(rows: List<Ticker.Row>) {
         if (!::tickerBox.isInitialized) return
         tickerBox.removeAllViews()
-        val d = resources.displayDensity
+        val d = resources.displayMetrics.density
         for ((i, r) in rows.withIndex()) {
             val tv = TextView(this)
+            val top = (4 * d).toInt()
+            val topRow = i == 0
             tv.text = getString(R.string.wheel_row, r.masked, r.carrier, r.prize)
-            tv.textSize = if (i == 0) 13f else 12f
-            tv.setTextColor(color(R.color.prf_text if i == 0 else R.color.prf_text_dim))
+            tv.textSize = if (topRow) 13f else 12f
+            tv.setTextColor(color(if (topRow) R.color.prf_text else R.color.prf_text_dim))
             tv.gravity = android.view.Gravity.CENTER
-            tv.setPadding(0, (4 * d).toInt(), 0, (4 * d).toInt())
+            tv.setPadding(0, top, 0, top)
             tickerBox.addView(tv)
         }
     }
