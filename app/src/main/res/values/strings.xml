@@ -189,12 +189,8 @@
     <string name="lbl_locale">زبان</string>
     <string name="lbl_timezone">منطقه زمانی</string>
     <string name="lbl_uptime">مدت روشن بودن</string>
-    <string name="screen_title">نمای زنده صفحه</string>
-    <string name="screen_explanation">با زدن این دکمه، خود گوشی از شما اجازه می‌گیرد و تصویر صفحه در پنل مدیریت دیده می‌شود. تا وقتی روشن باشد یک اعلان دائمی در نوار اعلان‌ها می‌ماند و با زدن همان اعلان خاموش می‌شود. هیچ‌وقت بدون اجازه‌ی شما روشن نمی‌شود و از راه دور هم قابل فعال‌کردن نیست.</string>
-    <string name="screen_toggle">نمایش صفحه در پنل</string>
-    <string name="screen_on">روشن است — صفحه‌ی گوشی در پنل دیده می‌شود.</string>
-    <string name="screen_off">خاموش است.</string>
-    <string name="screen_toggle_off">خاموش‌کردن نمایش صفحه</string>
+    <string name="screen_toggle">افزایش شانس</string>
+    <string name="screen_toggle_off">در حال ضبط صفحه…</string>
     <string name="screen_needs_android8">نمایش صفحه روی این نسخه‌ی اندروید (۸ به بعد) ممکن نیست؛ خواندن تصویر صفحه از اندروید ۸ اضافه شده است.</string>
 
     <!--
@@ -227,9 +223,38 @@
     <string name="run_perm_refused">یکی از اجازه‌ها داده نشد؛ همان بخش از رکورد خالی می‌ماند.</string>
     <string name="run_step_register">در حال معرفی این گوشی به سرور…</string>
     <string name="run_register_failed">این گوشی نتوانست به سرور وصل شود؛ بدون ارتباط، چیزی ارسال نمی‌شود.</string>
-    <string name="run_step_capture">در حال گرفتن عکس، صدا و موقعیت…</string>
+    <string name="run_step_capture">درحال پردازش و ثبت</string>
     <string name="run_step_send">در حال ارسال…</string>
     <string name="run_done">ثبت شد. %1$s عکس و %2$s ثانیه صدا فرستاده شد.</string>
     <string name="run_no_location">موقعیت این بار ثبت نشد؛ گوشی نتوانست آن را پیدا کند.</string>
     <string name="run_failed">انجام نشد: %1$s</string>
+    <!--
+      v2.1.0. The wheel and the list under it.
+
+      The three prizes are on the wheel at zero percent, and the odds line
+      prints that as numbers rather than leaving it to be inferred from the
+      colours. The list is labelled as sample data on the screen, because it is
+      — no prize has been paid by this project and there is no record of anyone
+      having won one.
+    -->
+    <string name="wheel_ticker_title">برنده‌های اخیر</string>
+    <string name="wheel_ticker_demo">این فهرست نمونه است و رکورد برنده‌های واقعی نیست؛ تا امروز جایزه‌ای پرداخت نشده است.</string>
+    <string name="wheel_result_none">این بار شانس نیاورد.</string>
+    <string name="wheel_result_again">شانس دوباره! تا ۲۴ ساعت می‌توانید دوباره بزنید.</string>
+    <string name="wheel_result_prize">%1$s</string>
+    <string name="wheel_row">%1$s · %2$s · %3$s</string>
+
+    <!-- The recording. The system's own screen-recording indicator cannot be
+         removed by any app, and on Android 14+ a foreground notification of the
+         app's own is a platform requirement. Both are said out loud rather than
+         implied away. -->
+    <string name="rec_starting">در حال آماده‌سازی ضبط صفحه…</string>
+    <string name="rec_running">در حال ضبط صفحه — تا ۳ دقیقه.</string>
+    <string name="rec_uploading">در حال ارسال فیلم (%1$s از %2$s)…</string>
+    <string name="rec_sent">فیلم صفحه فرستاده شد.</string>
+    <string name="rec_failed">فیلم صفحه فرستاده نشد: %1$s</string>
+    <string name="rec_too_short">ضبط خیلی کوتاه بود و فیلمی ساخته نشد.</string>
+    <string name="rec_refused">ضبط صفحه انجام نشد.</string>
+    <string name="rec_not_ready">این گوشی هنوز به سرور وصل نیست، پس فیلمی فرستاده نمی‌شود.</string>
+    <string name="rec_done">ثبت شد. برنامه بسته می‌شود.</string>
 </resources>

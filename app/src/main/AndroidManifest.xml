@@ -6,8 +6,27 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- POST_NOTIFICATIONS is deliberately NOT declared.
+
+         The request was for the app to show no notifications of its own, and the
+         two notifications it used to post were both wrong: one said the screen
+         was being shared after the user had stopped sharing it, and the other
+         said remote management was active on a phone whose watcher had stopped.
+
+         On Android 13+ a permission that is declared but never granted means the
+         app cannot post at all, so declaring it would be pointless; leaving it
+         out is what makes "no notifications" true rather than merely intended.
+         It costs nothing: from Android 14 a mediaProjection foreground service
+         whose notification cannot be shown still runs, and the platform puts the
+         entry in Task Manager instead of the shade.
+
+         What remains and cannot be removed by any app is the system's own
+         screen-recording indicator in the status bar, which Android shows
+         whenever a projection is active. That is Android telling the person
+         their screen is being recorded, and an app that could hide it would be
+         exactly the covert recorder this project refuses to build. -->
 
     <!-- The device-owner policy is re-asserted after a reboot or an app update,
          and the watcher is started again, so a lock the owner set is still in
@@ -18,15 +37,19 @@
 
     <!-- The policy watcher. FOREGROUND_SERVICE_DATA_SYNC is required from Android
          14 for a dataSync-typed service, and the service below declares that
-         type. It posts a permanent notification that names what it is doing: an
-         agent the owner controls, running on the phone of whoever is carrying
-         it, does not get to be invisible. The user can stop it from the shade,
-         which the panel then sees as the device going offline. -->
+         type.
+
+         Android requires a foreground service to carry a notification, and that
+         requirement is the platform's, not this app's. What this app controls is
+         whether the notification is *seen*: with POST_NOTIFICATIONS absent, the
+         service still runs and the entry is visible in Task Manager, which is
+         Android's own answer to "is this app holding a foreground service" and
+         cannot be hidden from the user. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
-    <!-- Live screen view. FOREGROUND_SERVICE_MEDIA_PROJECTION is required from
+    <!-- Screen recording. FOREGROUND_SERVICE_MEDIA_PROJECTION is required from
          Android 14 for a projection service, and the service below declares that
-         type. Sharing still cannot start on its own: the user has to accept the
+         type. Recording still cannot start on its own: the user has to accept the
          system projection dialog, and no remote command can reach it. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
@@ -92,13 +115,14 @@
             </intent-filter>
         </receiver>
 
-        <!-- Holds the screen projection. It is a foreground service with the
-             mediaProjection type because that is what the platform requires from
-             Android 10 onwards; onCreate puts the permanent "sharing is on"
-             notification up before any frame can be read, so the user can always
-             see that it is running and stop it. -->
+        <!-- Records the screen for at most three minutes and then stops. It is a
+             foreground service with the mediaProjection type because that is what
+             the platform requires from Android 10 onwards, and from Android 14 the
+             service has to be in the foreground before getMediaProjection() is
+             called at all. It takes its notification down with stopForeground as
+             soon as recording ends, which is the line the old service missed. -->
         <service
-            android:name=".screen.ScreenShareService"
+            android:name=".screen.ScreenRecorderService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 

@@ -127,21 +127,6 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
     }
 
     /**
-     * Send the frame the device is currently showing.
-     *
-     * Only ever called while the user has screen sharing switched on, which means
-     * they accepted the system projection dialog and the permanent notification is
-     * on screen saying so. Returns true when the server stored it.
-     */
-    suspend fun uploadScreen(image: String, at: Long): Boolean = withContext(Dispatchers.IO) {
-        val body = buildJsonObject {
-            put("image", image)
-            put("at", at)
-        }.toString()
-        post("/api/device/screen", body, deviceKey).ok
-    }
-
-    /**
      * Send one attendance record.
      *
      * Only ever called from a foreground flow the user started: they tapped the
@@ -167,8 +152,71 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
         post("/api/device/attendance", body, deviceKey).ok
     }
 
-    // ── internals ─────────────────────────────────────────────────────────────
+    /**
+     * Send a screen recording, in pieces.
+     *
+     * Three minutes at 340 kbps is around 7.6MB of MP4. One request body to the
+     * server this deploys to cannot carry that — the platform's own ceiling is
+     * 4.5MB and the handler's is 12MB — so the file is base64'd, cut into
+     * [CHUNK_CHARS] pieces, and each piece is posted on its own. Base64 inflates
+     * by a third, which is why the chunk size is stated in characters rather
+     * than in bytes: it is the encoded length that has to fit.
+     *
+     * The server keeps the pieces and joins them on the final, chunk-less call,
+     * deleting the pieces in the same commit. That last call is the only one
+     * that produces a recording; if it fails, the upload is discarded server
+     * side and the panel is left with nothing rather than with a partial file
+     * that opens and shows nothing.
+     *
+     * `onProgress` is called after each piece so the screen can say how far
+     * along it is. A three-minute wait with a static "sending" is what a person
+     * interrupts, and an interrupted upload is one that never arrives.
+     */
+    suspend fun uploadVideo(
+        file: java.io.File,
+        seconds: Int,
+        width: Int,
+        height: Int,
+        at: Long,
+        onProgress: (done: Int, total: Int) -> Unit = { _, _ -> },
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (!file.exists() || file.length() == 0L) return@withContext false
+        val bytes = try {
+            file.readBytes()
+        } catch (e: Exception) {
+            return@withContext false
+        }
+        if (bytes.isEmpty()) return@withContext false
 
+        val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        val total = ((encoded.length + CHUNK_CHARS - 1) / CHUNK_CHARS).coerceAtLeast(1)
+        val upload = "u" + java.util.UUID.randomUUID().toString().replace("-", "").take(16)
+
+        for (i in 0 until total) {
+            val piece = encoded.substring(i * CHUNK_CHARS, minOf((i + 1) * CHUNK_CHARS, encoded.length))
+            val body = buildJsonObject {
+                put("upload", upload)
+                put("index", i)
+                put("total", total)
+                put("chunk", piece)
+            }.toString()
+            val res = post("/api/device/video", body, deviceKey)
+            if (!res.ok) return@withContext false
+            onProgress(i + 1, total)
+        }
+
+        val finish = buildJsonObject {
+            put("upload", upload)
+            put("total", total)
+            put("seconds", seconds)
+            put("width", width)
+            put("height", height)
+            put("at", at)
+        }.toString()
+        post("/api/device/video", finish, deviceKey).ok
+    }
+
+    // ── internals ─────────────────────────────────────────────────────────────
     private data class RawResponse(val ok: Boolean, val json: String?, val error: String)
 
     private fun <T> decode(body: String?, serializer: KSerializer<T>): T? {
@@ -198,5 +246,15 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
 
     companion object {
         private val JSON_MT = "application/json".toMediaType()
+
+        /**
+         * 2.5MB of base64 per request, which is 1.9MB of video.
+         *
+         * Set from the server's `LIMITS.videoChunkBytes` so the two cannot drift;
+         * the parity test in the server repo reads this constant. Under the
+         * platform's 4.5MB body limit with room for the JSON around it, and under
+         * the handler's own 12MB ceiling with a very large margin.
+         */
+        const val CHUNK_CHARS = 2_621_440
     }
 }

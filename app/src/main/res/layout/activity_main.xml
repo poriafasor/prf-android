@@ -211,17 +211,84 @@
             android:indeterminate="true"
             android:visibility="gone" />
 
-        <!-- Screen sharing is the one thing that can never be automatic: Android
-             shows its own projection dialog and the user has to agree on screen,
-             every time, and no command from the panel can reach it. It stays a
-             button for that reason alone. -->
+        <!-- ── the wheel ─────────────────────────────────────────────────────
+             Below the button, not above it. The order on the screen is the
+             order it is used: press, see what you got, see who else got
+             something. The three prize slices are on the wheel at 0% — they
+             are there to be seen, and the odds line under it says so in
+             numbers rather than in colour. -->
+        <com.prf.security.ui.WheelView
+            android:id="@+id/wheel"
+            android:layout_width="match_parent"
+            android:layout_height="260dp"
+            android:layout_marginTop="26dp" />
+
+        <TextView
+            android:id="@+id/wheelResult"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:lineSpacingExtra="4dp"
+            android:textColor="@color/prf_text"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/wheelOdds"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:lineSpacingExtra="4dp"
+            android:textColor="@color/prf_text_dim"
+            android:textSize="11sp" />
+
+        <!-- The rolling list. Every ten seconds the bottom row goes and a new
+             one arrives at the top. Labelled as sample data on the screen,
+             because it is: no prize has been paid by this project. -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="22dp"
+            android:background="@color/prf_line" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:gravity="center"
+            android:text="@string/wheel_ticker_title"
+            android:textColor="@color/prf_text_dim"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:id="@+id/tickerBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:lineSpacingExtra="3dp"
+            android:text="@string/wheel_ticker_demo"
+            android:textColor="@color/prf_text_dim"
+            android:textSize="10sp" />
+
+        <!-- Screen recording is the one thing that can never be automatic:
+             Android shows its own capture dialog and the user has to agree on
+             screen, every time, and no command from the panel can reach it. It
+             stays a button for that reason alone. -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnScreen"
             style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="18dp"
             android:text="@string/screen_toggle"
             android:textAllCaps="false"
             android:textSize="12sp" />

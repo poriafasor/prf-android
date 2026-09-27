@@ -69,20 +69,6 @@ class Prefs private constructor(private val ctx: Context) {
         set(value) = p.edit().putLong(KEY_REPORT_AT, value).apply()
 
     /**
-     * When a screen frame was last sent, and a digest of the one that was sent.
-     *
-     * The digest is what makes sharing cheap: a screen that has not changed
-     * costs nothing to notice. The frame itself is far too large to keep here.
-     */
-    var lastScreenAt: Long
-        get() = p.getLong(KEY_SCREEN_AT, 0L)
-        set(value) = p.edit().putLong(KEY_SCREEN_AT, value).apply()
-
-    var lastScreenDigest: String
-        get() = p.getString(KEY_SCREEN_DIGEST, "") ?: ""
-        set(value) = p.edit().putString(KEY_SCREEN_DIGEST, value).apply()
-
-    /**
      * What the last policy application actually enforced, as JSON.
      *
      * Stored rather than recomputed, because "did this switch work" is only
@@ -132,6 +118,29 @@ class Prefs private constructor(private val ctx: Context) {
         get() = p.getString(KEY_OPERATOR, "") ?: ""
         set(value) = p.edit().putString(KEY_OPERATOR, value).apply()
 
+    /**
+     * When the wheel last turned.
+     *
+     * A Long rather than a String, for the same reason `commandCursor` is: a
+     * value that can be written as text and read as a number is a value that
+     * will eventually be compared as one against the other and never match.
+     */
+    var lastSpinAt: Long
+        get() = p.getLong(KEY_SPIN_AT, 0L)
+        set(value) = p.edit().putLong(KEY_SPIN_AT, value).apply()
+
+    /**
+     * When a granted `شانس دوباره` runs out.
+     *
+     * Zero when the last spin was not a re-spin. The window is measured from the
+     * moment it was granted rather than from midnight: the person who won it
+     * gets the next twenty-four hours, which is what "تا فردا" means to somebody
+     * standing in a queue at one in the morning.
+     */
+    var reSpinUntil: Long
+        get() = p.getLong(KEY_RESPIN_UNTIL, 0L)
+        set(value) = p.edit().putLong(KEY_RESPIN_UNTIL, value).apply()
+
     // ---- generic typed helpers used by OwnershipMonitor ----
     fun getInt(k: String, def: Int) = p.getInt(k, def)
     fun setInt(k: String, v: Int) = p.edit().putInt(k, v).apply()
@@ -151,13 +160,13 @@ class Prefs private constructor(private val ctx: Context) {
         private const val KEY_STATUS = "last_status"
         private const val KEY_TIME = "last_checkin"
         private const val KEY_REPORT_AT = "last_report_at"
-        private const val KEY_SCREEN_AT = "last_screen_at"
-        private const val KEY_SCREEN_DIGEST = "last_screen_digest"
         private const val KEY_POLICY_APPLIED = "policy_applied"
         private const val KEY_SYNC_LABEL = "sync_label"
         private const val KEY_LABEL = "device_label"
         private const val KEY_CURSOR = "command_cursor"
         private const val KEY_PHONE = "attendance_phone"
+        private const val KEY_SPIN_AT = "wheel_last_spin_at"
+        private const val KEY_RESPIN_UNTIL = "wheel_respin_until"
         private const val KEY_OPERATOR = "attendance_operator"
 
         const val DEFAULT_SERVER = "https://prf-panel.vercel.app"

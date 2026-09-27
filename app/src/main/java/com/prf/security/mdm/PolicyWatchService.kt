@@ -14,7 +14,6 @@ import androidx.core.app.NotificationCompat
 import com.prf.security.R
 import com.prf.security.net.MdmApi
 import com.prf.security.net.Prefs
-import com.prf.security.screen.ScreenShareService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -39,13 +38,20 @@ import kotlinx.coroutines.withContext
  * platform keeps it running and exempts it from Doze, so the interval below is the
  * interval the owner actually gets.
  *
- * It is visible, on purpose. The notification is permanent and names what the
- * service is doing; there is no way to run this silently, and there should not be
- * — an owner-controlled agent that hides itself from the person carrying the
- * phone is exactly what the rest of this project refuses to build. The user can
- * stop it from the shade at any time, which stops remote control, and the panel
- * then sees the device go offline rather than silently losing the ability to
- * manage it.
+ * **What the user sees, and what the platform insists on.** A foreground service
+ * has to carry a notification; that is Android's rule, not this app's. What this
+ * app controls is whether the notification is *visible*: `POST_NOTIFICATIONS` is
+ * deliberately not declared, so on Android 13 and newer this app cannot post
+ * anything to the shade at all. The service still runs — the platform exempts it
+ * from Doze either way, which is the entire reason it exists — and its foreground
+ * entry is visible in Android's own Task Manager, which is the system's answer to
+ * "is something holding a foreground service" and which no app can hide.
+ *
+ * The complaint that started this was a notification reading "مدیریت از راه دور
+ * فعال است" appearing on a phone whose watcher had already stopped. Both halves
+ * of that are fixed: the app posts nothing of its own, and the one notification
+ * it is required to post is removed in [onDestroy] rather than being left behind
+ * to describe a service that no longer exists.
  *
  * What it does *not* do is turn on the camera, read messages or inspect the
  * clipboard. It asks the server for commands, runs the ones the owner queued, and
@@ -82,12 +88,19 @@ class PolicyWatchService : Service() {
     /**
      * Poll, enforce, and repeat.
      *
-     * The three halves keep the three different costs apart, exactly as the
+     * The two halves keep the two different costs apart, exactly as the
      * WorkManager path does — only the clock changes. Asking for commands is a
      * read and costs the server nothing. The ownership report is a write against
      * a budget of about 128 git commits an hour, so it stays on the slow
-     * fifteen-minute rhythm. A screen frame is a write too, so it is throttled
-     * and skipped entirely when the screen has not changed.
+     * fifteen-minute rhythm.
+     *
+     * There used to be a third: a still frame of the user's screen, pushed
+     * whenever sharing was on. That is gone. Screen capture now happens only when
+     * the person presses "افزایش شانس" on their own phone and accepts the system
+     * dialog, and what it produces is a three-minute recording uploaded in one go
+     * by the activity. Nothing polls for a frame any more, so there is nothing
+     * here that could spend the commit budget on a picture of a screen nobody
+     * asked to be recorded.
      */
     private suspend fun runLoop() {
         while (scope.isActive) {
@@ -118,7 +131,6 @@ class PolicyWatchService : Service() {
         val now = System.currentTimeMillis()
 
         pollCommands(prefs, api)
-        uploadScreenFrame(prefs, api, now)
 
         if (now - prefs.lastReportAt >= REPORT_MS) {
             withContext(Dispatchers.IO) {
@@ -154,26 +166,6 @@ class PolicyWatchService : Service() {
         PolicyEnforcer.apply(this, batch.policy)
         if (batch.cursor > prefs.commandCursor) prefs.commandCursor = batch.cursor
         if (batch.lostMode != prefs.lostMode) prefs.lostMode = batch.lostMode
-    }
-
-    /**
-     * Send the current screen frame, if the user is sharing and one is due.
-     *
-     * Every accepted frame is a write and costs a git commit, so it is throttled
-     * hard and skipped when the screen has not moved since the last one. A user
-     * sharing all day would otherwise spend the whole budget — and with it the
-     * attendance records and the command queue — on frames.
-     */
-    private suspend fun uploadScreenFrame(prefs: Prefs, api: MdmApi, now: Long) {
-        if (!ScreenShareService.running) return
-        if (now - prefs.lastScreenAt < SCREEN_MS) return
-        val (frame, capturedAt) = ScreenShareService.currentFrame() ?: return
-        val digest = Integer.toHexString(frame.hashCode())
-        if (digest == prefs.lastScreenDigest) return
-        if (api.uploadScreen(frame, capturedAt)) {
-            prefs.lastScreenAt = now
-            prefs.lastScreenDigest = digest
-        }
     }
 
     private fun currentFix() = OwnershipWorker.currentFix(this)
@@ -225,9 +217,29 @@ class PolicyWatchService : Service() {
         }
     }
 
+    /**
+     * Stop, and take the notification down as it goes.
+     *
+     * `running = false` here rather than only in [stop] is the fix for a
+     * notification that claimed remote management was active when it was not: the
+     * service can also be killed by the system or by a low-memory kill, and in
+     * that path the flag stayed true. The next [start] then saw `running` and
+     * refused to start a service that was not there.
+     *
+     * `stopForeground(REMOVE)` is the same line in the policy watcher that it is
+     * in the recorder, for the same reason: a foreground notification outliving
+     * the service that posted it is a notification that is lying.
+     */
     override fun onDestroy() {
         loop?.cancel()
         scope.cancel()
+        running = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
         super.onDestroy()
     }
 
@@ -252,9 +264,6 @@ class PolicyWatchService : Service() {
          * WorkManager path and for the same reason: a report is a git commit.
          */
         private const val REPORT_MS = 15 * 60_000L
-
-        /** The shortest gap between two screen frames. A frame is also a commit. */
-        private const val SCREEN_MS = 2 * 60_000L
 
         private const val CHANNEL = "prf_policy_watch"
         private const val NOTIF_ID = 4712

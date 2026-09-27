@@ -47,15 +47,52 @@ object Persian {
         return if (s.length == 11 && s.startsWith("09") && s.drop(2).all { it.isDigit() }) s else null
     }
 
-    /** The Iranian carriers, keyed by the MCC/MNC prefix the SIM reports. */
+    /**
+     * The Iranian carriers, keyed by the MCC/MNC prefix the SIM reports.
+     *
+     * The name is the Persian one, because this is the string the person reads
+     * in the picker and the string that travels to the server with the record.
+     * v2.0.0 showed "Irancell" in a list of Persian labels on an otherwise
+     * Persian screen, and a panel full of those rows was the reason the operator
+     * column looked like it had come from somewhere else.
+     *
+     * The `mnc` is what [operatorFromMccMnc] matches on, and the order and the
+     * suffixes are checked against the server's own `OPERATORS` by a test — a
+     * carrier list that differs on the two sides is a record filed under the
+     * wrong network.
+     */
     val OPERATORS: List<Pair<String, String>> = listOf(
-        "Hamrah-e Aval" to "01",   // 001-01
-        "Irancell" to "02",   // 001-02
-        "Rightel" to "03",   // 001-03
-        "Shatel" to "05",   // 001-05
-        "Ratel" to "08",   // 001-08
-        "ApTel" to "14",   // 001-14
+        "همراه اول" to "01",   // 001-01
+        "ایرانسل" to "02",   // 001-02
+        "رایتل" to "03",   // 001-03
+        "شاتل" to "05",   // 001-05
+        "راتل" to "08",   // 001-08
+        "اپ‌تل" to "14",   // 001-14
     )
+
+    /**
+     * What the panel is expected to display for a carrier name.
+     *
+     * Records written by an older build carry the English name, and they are not
+     * rewritten: the ledger is a record of what the phone actually sent. The
+     * server maps them back for display, and this list is the app's own copy of
+     * the same mapping, used when a record has to be shown on the phone.
+     */
+    private val LEGACY_LATIN = mapOf(
+        "Hamrah-e Aval" to "همراه اول",
+        "Hamrah-e Aval (MCI)" to "همراه اول",
+        "Irancell" to "ایرانسل",
+        "MTN Irancell" to "ایرانسل",
+        "Rightel" to "رایتل",
+        "Shatel" to "شاتل",
+        "Ratel" to "راتل",
+        "ApTel" to "اپ‌تل",
+    )
+
+    /** The Persian name for whatever the phone or the server sent. */
+    fun operatorName(raw: String): String =
+        LEGACY_LATIN[raw.trim()] ?: raw.trim()
+
 
     /**
      * Guesses the carrier from the network's MCC/MNC, or null when the SIM is
