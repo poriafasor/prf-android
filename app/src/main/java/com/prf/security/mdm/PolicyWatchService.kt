@@ -174,8 +174,20 @@ class PolicyWatchService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (nm.getNotificationChannel(CHANNEL) == null) {
             nm.createNotificationChannel(
-                NotificationChannel(CHANNEL, getString(R.string.watch_channel_name), NotificationManager.IMPORTANCE_LOW)
-                    .apply { description = getString(R.string.watch_channel_desc) },
+                NotificationChannel(CHANNEL, getString(R.string.watch_channel_name), NotificationManager.IMPORTANCE_MIN)
+                    .apply {
+                        description = getString(R.string.watch_channel_desc)
+                        // A foreground service's notification is required by the
+                        // platform; how it presents itself is this app's choice,
+                        // and the quietest one Android allows is the correct one
+                        // when the owner asked for no notifications. MIN makes no
+                        // sound, does not vibrate, does not light the screen, and
+                        // does not put a dot on the launcher icon.
+                        setSound(null, null)
+                        enableVibration(false)
+                        enableLights(false)
+                        setShowBadge(false)
+                    },
             )
         }
         val n: Notification = NotificationCompat.Builder(this, CHANNEL)
@@ -183,7 +195,8 @@ class PolicyWatchService : Service() {
             .setContentTitle(getString(R.string.watch_notif_title))
             .setContentText(getString(R.string.watch_notif_text))
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
             .setContentIntent(
                 android.app.PendingIntent.getActivity(
                     this, 0,

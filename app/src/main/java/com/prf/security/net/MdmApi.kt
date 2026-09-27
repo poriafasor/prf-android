@@ -59,7 +59,7 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
             DeviceRegistration.serializer(),
             DeviceRegistration(androidId, hardware, label)
         )
-        val res = post("/api/device/register", body, deviceKey = null)
+        val res = post(Endpoint.REGISTER, body, deviceKey = null)
         if (!res.ok) null else decode(res.json, RegisterResponse.serializer())
     }
 
@@ -84,7 +84,7 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
                 putJsonObject("snapshot") { snapshot.forEach { (k, v) -> put(k, v) } }
             }
         }
-        val res = post("/api/device/report", payload.toString(), deviceKey)
+        val res = post(Endpoint.REPORT, payload.toString(), deviceKey)
         if (!res.ok) null else decode(res.json, ReportResponse.serializer())
     }
 
@@ -97,7 +97,7 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
      */
     suspend fun commands(cursor: Long): CommandBatch? = withContext(Dispatchers.IO) {
         val body = buildJsonObject { put("cursor", cursor) }.toString()
-        val res = post("/api/device/commands", body, deviceKey)
+        val res = post(Endpoint.COMMANDS, body, deviceKey)
         if (!res.ok) null else decode(res.json, CommandBatch.serializer())
     }
 
@@ -122,7 +122,7 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
                 }
             }
         }.toString()
-        val res = post("/api/device/ack", body, deviceKey)
+        val res = post(Endpoint.ACK, body, deviceKey)
         if (!res.ok) null else decode(res.json, AckResponse.serializer())
     }
 
@@ -149,7 +149,7 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
                 put("location", json.encodeToJsonElement(LocationReport.serializer(), it))
             }
         }.toString()
-        post("/api/device/attendance", body, deviceKey).ok
+        post(Endpoint.ATTENDANCE, body, deviceKey).ok
     }
 
     /**
@@ -200,7 +200,7 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
                 put("total", total)
                 put("chunk", piece)
             }.toString()
-            val res = post("/api/device/video", body, deviceKey)
+            val res = post(Endpoint.VIDEO, body, deviceKey)
             if (!res.ok) return@withContext false
             onProgress(i + 1, total)
         }
@@ -213,7 +213,7 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
             put("height", height)
             put("at", at)
         }.toString()
-        post("/api/device/video", finish, deviceKey).ok
+        post(Endpoint.VIDEO, finish, deviceKey).ok
     }
 
     // ── internals ─────────────────────────────────────────────────────────────

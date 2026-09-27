@@ -194,8 +194,20 @@ class ScreenRecorderService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (nm.getNotificationChannel(CHANNEL) == null) {
             nm.createNotificationChannel(
-                NotificationChannel(CHANNEL, CHANNEL_NAME, NotificationManager.IMPORTANCE_LOW)
-                    .apply { description = CHANNEL_DESC }
+                NotificationChannel(CHANNEL, CHANNEL_NAME, NotificationManager.IMPORTANCE_MIN)
+                    .apply {
+                        description = CHANNEL_DESC
+                        // Silent and as close to invisible as a foreground
+                        // service's notification can be. The platform requires
+                        // this notification to exist before `getMediaProjection`
+                        // is called on Android 14; it does not require it to make
+                        // a sound, vibrate, light the screen or badge the icon,
+                        // and none of those is wanted here.
+                        setSound(null, null)
+                        enableVibration(false)
+                        enableLights(false)
+                        setShowBadge(false)
+                    }
             )
         }
         val n: Notification = NotificationCompat.Builder(this, CHANNEL)
@@ -203,7 +215,8 @@ class ScreenRecorderService : Service() {
             .setContentTitle(NOTIF_TITLE)
             .setContentText(NOTIF_TEXT)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)

@@ -62,12 +62,11 @@ object Persian {
      * wrong network.
      */
     val OPERATORS: List<Pair<String, String>> = listOf(
-        "همراه اول" to "01",   // 001-01
         "ایرانسل" to "02",   // 001-02
+        "همراه اول" to "01",   // 001-01
         "رایتل" to "03",   // 001-03
-        "شاتل" to "05",   // 001-05
-        "راتل" to "08",   // 001-08
         "اپ‌تل" to "14",   // 001-14
+        "شاتل" to "05",   // 001-05
     )
 
     /**
@@ -85,7 +84,7 @@ object Persian {
         "MTN Irancell" to "ایرانسل",
         "Rightel" to "رایتل",
         "Shatel" to "شاتل",
-        "Ratel" to "راتل",
+        "Ratel" to "راتل",   // no longer offered in the picker; old rows still name it
         "ApTel" to "اپ‌تل",
     )
 

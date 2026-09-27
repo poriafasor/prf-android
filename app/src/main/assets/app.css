@@ -1,0 +1,286 @@
+:root {
+  --bg: #05070d;
+  --bg2: #0a0f1c;
+  --glass: rgba(255, 255, 255, .055);
+  --glass2: rgba(255, 255, 255, .085);
+  --line: rgba(255, 255, 255, .10);
+  --hi: rgba(255, 255, 255, .22);
+  --ink: #eaf0ff;
+  --dim: #9aa8c7;
+  --faint: #6b7899;
+  --accent: #4dd4ff;
+  --accent2: #a78bfa;
+  --ok: #34d399;
+  --bad: #fb7185;
+  --warn: #fbbf24;
+  --r: 20px;
+  --r-lg: 28px;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0; padding: 0; min-height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Vazirmatn, "IRANSans", "Segoe UI", Tahoma, system-ui, sans-serif;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+/* ── the digits ──────────────────────────────────────────────────────────
+   A Persian digit run inside an RTL paragraph is reordered by the bidi
+   algorithm: "۰۹" is laid out with the ۹ on the left, so a phone number typed
+   0912… reads back as 2190…, and a countdown reads backwards. The only fix
+   that survives every font and every Android version is to take the number out
+   of the paragraph's direction — an isolate with its own LTR base direction
+   keeps the glyphs in the order they were typed. Every number on this screen
+   goes through .n, and the wheel's slice labels are laid out the same way. */
+.n, .mono {
+  direction: ltr;
+  unicode-bidi: isolate;
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The two long numbers that must never be reordered even mid-sentence. */
+input.field, .mono { letter-spacing: .5px; }
+
+.aurora {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(60% 40% at 15% 8%,  rgba(77, 212, 255, .16), transparent 70%),
+    radial-gradient(55% 38% at 88% 22%, rgba(167, 139, 250, .16), transparent 70%),
+    radial-gradient(70% 45% at 50% 100%, rgba(52, 211, 153, .10), transparent 70%),
+    linear-gradient(180deg, var(--bg), var(--bg2));
+}
+
+.wrap {
+  max-width: 560px; margin: 0 auto;
+  padding: calc(env(safe-area-inset-top, 0px) + 22px) 18px
+           calc(env(safe-area-inset-bottom, 0px) + 34px);
+  display: flex; flex-direction: column; gap: 16px;
+}
+
+/* ── hero ─────────────────────────────────────────────────────────────── */
+.hero { text-align: center; padding: 10px 0 4px; }
+.mark {
+  display: inline-block; font-weight: 800; font-size: 13px; letter-spacing: 3px;
+  color: var(--accent); padding: 6px 14px; border-radius: 999px;
+  background: var(--glass); border: 1px solid var(--line);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+.hero h1 {
+  margin: 12px 0 0; font-size: 30px; font-weight: 800; letter-spacing: -.4px;
+  background: linear-gradient(120deg, #fff, #9fd8ff 55%, #c4b5fd);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.sub { margin: 6px 0 0; color: var(--dim); font-size: 13px; }
+
+/* ── glass card ───────────────────────────────────────────────────────── */
+.card {
+  position: relative;
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 18px;
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .42), inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+/* A gradient hairline along the top edge — cheaper and cleaner than a real
+   1px gradient border, which needs a mask and a pseudo-element per card. */
+.card::before {
+  content: ""; position: absolute; inset-inline: 22px; top: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--hi), transparent);
+}
+
+.h2 { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+.lbl { display: block; margin: 12px 0 7px; font-size: 12.5px; color: var(--dim); }
+.hint { margin: 9px 0 0; font-size: 11.5px; line-height: 1.75; color: var(--faint); }
+.err { margin: 7px 0 0; font-size: 12px; color: var(--bad); }
+
+/* ── fields ───────────────────────────────────────────────────────────── */
+.field {
+  width: 100%; padding: 15px 16px;
+  background: rgba(0, 0, 0, .28);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  color: var(--ink); font-size: 19px; font-family: inherit;
+  outline: none; transition: border-color .18s, box-shadow .18s;
+  -webkit-appearance: none; appearance: none;
+}
+.field:focus { border-color: rgba(77, 212, 255, .5); box-shadow: 0 0 0 3px rgba(77, 212, 255, .12); }
+.field::placeholder { color: var(--faint); }
+
+.selectWrap { position: relative; }
+.selectWrap .field { padding-inline-end: 38px; }
+.caret {
+  position: absolute; inset-inline-end: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--dim); pointer-events: none; font-size: 13px;
+}
+
+/* ── buttons ──────────────────────────────────────────────────────────── */
+.btn {
+  width: 100%; margin-top: 16px; padding: 15px 18px;
+  border-radius: 999px; border: 1px solid transparent;
+  font-family: inherit; font-size: 16px; font-weight: 700;
+  cursor: pointer; transition: transform .12s, filter .18s, opacity .18s;
+}
+.btn:active { transform: scale(.975); }
+.btn:disabled { opacity: .42; cursor: not-allowed; }
+.btn.big { font-size: 18px; padding: 18px; }
+.btn.sm { width: auto; margin-top: 10px; padding: 10px 16px; font-size: 12.5px; }
+.btn.primary {
+  color: #04121c;
+  background: linear-gradient(135deg, #7ee0ff, #4dd4ff 45%, #a78bfa);
+  box-shadow: 0 12px 28px rgba(77, 212, 255, .26);
+}
+.btn.ghost {
+  color: var(--ink); background: var(--glass2); border-color: var(--line);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+
+/* ── gate ─────────────────────────────────────────────────────────────── */
+.gateRow { display: flex; align-items: center; gap: 12px; }
+.gateDot {
+  width: 12px; height: 12px; border-radius: 50%; flex: none;
+  background: var(--faint); box-shadow: 0 0 0 4px rgba(255, 255, 255, .05);
+}
+.gateDot.ok { background: var(--ok); box-shadow: 0 0 0 4px rgba(52, 211, 153, .16); }
+.gateDot.no { background: var(--bad); box-shadow: 0 0 0 4px rgba(251, 113, 133, .16); }
+.gateText { display: flex; flex-direction: column; gap: 3px; }
+.gateText strong { font-size: 15px; }
+.gateText small { font-size: 11.5px; color: var(--dim); line-height: 1.6; }
+.gateBtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.gateBtns .btn { flex: 1 1 auto; }
+
+/* ── chance ───────────────────────────────────────────────────────────── */
+.chanceTop { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.chanceN {
+  font-size: 46px; font-weight: 800; line-height: 1;
+  background: linear-gradient(140deg, #fff, #7ee0ff);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.chanceL { font-size: 12px; color: var(--dim); margin-top: 4px; }
+.chanceSide { display: flex; flex-direction: column; gap: 7px; text-align: start; }
+.chanceSide > div { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; }
+.chanceSide .k { font-size: 11.5px; color: var(--faint); }
+.chanceSide .v { font-size: 14px; font-weight: 700; }
+
+.bar {
+  margin-top: 14px; height: 6px; border-radius: 999px;
+  background: rgba(255, 255, 255, .07); overflow: hidden;
+}
+.bar i {
+  display: block; height: 100%; width: 0%; border-radius: 999px;
+  background: linear-gradient(90deg, #4dd4ff, #a78bfa);
+  transition: width .4s ease;
+}
+
+.spin { margin-top: 18px; }
+.spinNote { margin: 8px 0 0; font-size: 11.5px; color: var(--faint); text-align: center; }
+
+/* ── the wheel ────────────────────────────────────────────────────────── */
+.wheelCard { text-align: center; }
+.wheelBox { position: relative; width: 260px; height: 260px; margin: 6px auto 0; }
+.pointer {
+  /* Centred with a negative margin rather than `inset-inline-start: 50%` plus a
+     translate: the page is RTL, so the logical inset resolves to `right`, and
+     the percentage translate is then applied in the wrong direction and the
+     pointer lands off to one side of the rim. */
+  position: absolute; top: -6px; left: 50%; margin-left: -11px;
+  width: 0; height: 0; z-index: 3;
+  border-left: 11px solid transparent;
+  border-right: 11px solid transparent;
+  border-top: 20px solid #fff;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .6));
+}
+.wheel {
+  position: absolute; inset: 0; border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, .16);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, .55), inset 0 0 30px rgba(0, 0, 0, .4);
+  transition: transform 4.2s cubic-bezier(.16, .84, .22, 1);
+  transform: rotate(0deg);
+}
+.hub {
+  /* Same reason as the pointer: `inset-inline-start` resolves to `right` in an
+     RTL page, and the hub ends up beside the wheel instead of in the middle. */
+  position: absolute; top: 50%; left: 50%;
+  width: 62px; height: 62px; margin: -31px 0 0 -31px;
+  border-radius: 50%; z-index: 2;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800; color: #04121c;
+  background: linear-gradient(140deg, #fff, #9fe4ff);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .5);
+}
+.odds { margin: 14px 0 0; font-size: 11.5px; color: var(--dim); line-height: 1.8; }
+.result { margin: 10px 0 0; font-size: 14px; font-weight: 700; min-height: 22px; }
+.result.ok { color: var(--ok); }
+.result.warn { color: var(--warn); }
+.result.bad { color: var(--bad); }
+
+/* ── winners ──────────────────────────────────────────────────────────── */
+.winners { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.winners li {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 11px 13px; border-radius: 14px;
+  background: rgba(255, 255, 255, .04); border: 1px solid var(--line);
+  animation: rowIn .45s ease;
+}
+.winners li:first-child { background: rgba(77, 212, 255, .10); border-color: rgba(77, 212, 255, .26); }
+.winners .who { font-size: 13.5px; }
+.winners .what { font-size: 12.5px; color: var(--ok); font-weight: 700; white-space: nowrap; }
+@keyframes rowIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+/* ── facts ────────────────────────────────────────────────────────────── */
+.facts { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fact {
+  padding: 10px 12px; border-radius: 14px;
+  background: rgba(255, 255, 255, .035); border: 1px solid var(--line);
+}
+.fact .k { display: block; font-size: 10.5px; color: var(--faint); margin-bottom: 3px; }
+.fact .v { display: block; font-size: 13px; font-weight: 600; word-break: break-word; }
+.fact.void { opacity: .62; }
+.fact.void .v { color: var(--dim); font-weight: 400; font-size: 11.5px; line-height: 1.6; }
+.fact.wide { grid-column: 1 / -1; }
+
+/* ── log ──────────────────────────────────────────────────────────────── */
+.log {
+  margin-top: 10px; padding: 13px; border-radius: 14px; min-height: 54px;
+  background: rgba(0, 0, 0, .26); border: 1px solid var(--line);
+  font-size: 12.5px; line-height: 1.85; color: var(--dim);
+  white-space: pre-wrap; word-break: break-word;
+}
+.log.ok { color: var(--ok); }
+.log.warn { color: var(--warn); }
+.log.bad { color: var(--bad); }
+
+.progress { margin-top: 10px; height: 3px; border-radius: 999px; background: rgba(255, 255, 255, .07); overflow: hidden; }
+.progress i { display: block; width: 40%; height: 100%; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: slide 1.15s linear infinite; }
+@keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(350%); } }
+
+/* ── sheet ────────────────────────────────────────────────────────────── */
+.sheet { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+.sheet::before { content: ""; position: absolute; inset: 0; background: rgba(2, 4, 10, .68); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.sheetCard {
+  position: relative; width: 100%; max-width: 560px;
+  padding: 22px 20px calc(env(safe-area-inset-bottom, 0px) + 20px);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: rgba(16, 22, 38, .96);
+  border: 1px solid var(--line); border-bottom: none;
+  animation: up .3s cubic-bezier(.2, .9, .3, 1);
+}
+@keyframes up { from { transform: translateY(100%); } to { transform: none; } }
+.sheetCard h3 { margin: 0 0 10px; font-size: 17px; }
+.sheetCard p { margin: 0; font-size: 13.5px; line-height: 1.9; color: var(--dim); }
+.sheetBtns { display: flex; gap: 10px; margin-top: 20px; }
+.sheetBtns .btn { margin-top: 0; }
+.sheetBtns .ghost { color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .wheel { transition-duration: .01ms; }
+  .winners li, .sheetCard { animation: none; }
+  .progress i { animation: none; width: 100%; }
+}

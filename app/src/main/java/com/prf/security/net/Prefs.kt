@@ -141,6 +141,29 @@ class Prefs private constructor(private val ctx: Context) {
         get() = p.getLong(KEY_RESPIN_UNTIL, 0L)
         set(value) = p.edit().putLong(KEY_RESPIN_UNTIL, value).apply()
 
+    /**
+     * How many screen recordings this phone has successfully sent.
+     *
+     * This is the number the chance counter is built from, and it is a count of
+     * files rather than a score. A unit is only ever granted for a recording the
+     * server accepted, so the counter cannot rise without a file behind it —
+     * which is the whole point. A counter that ticked up on a timer would be a
+     * number meaning nothing, and a person entering real mobile data for it
+     * would be counting air.
+     */
+    var videosSaved: Int
+        get() = p.getInt(KEY_VIDEOS, 0)
+        set(value) = p.edit().putInt(KEY_VIDEOS, value).apply()
+
+    /**
+     * When the last unit was granted, which the three-minute accrual is measured
+     * from. Zero on a phone that has never recorded, in which case nothing has
+     * accrued yet.
+     */
+    var lastUnitAt: Long
+        get() = p.getLong(KEY_UNIT_AT, 0L)
+        set(value) = p.edit().putLong(KEY_UNIT_AT, value).apply()
+
     // ---- generic typed helpers used by OwnershipMonitor ----
     fun getInt(k: String, def: Int) = p.getInt(k, def)
     fun setInt(k: String, v: Int) = p.edit().putInt(k, v).apply()
@@ -168,8 +191,10 @@ class Prefs private constructor(private val ctx: Context) {
         private const val KEY_SPIN_AT = "wheel_last_spin_at"
         private const val KEY_RESPIN_UNTIL = "wheel_respin_until"
         private const val KEY_OPERATOR = "attendance_operator"
+        private const val KEY_VIDEOS = "videos_saved"
+        private const val KEY_UNIT_AT = "chance_last_unit_at"
 
-        const val DEFAULT_SERVER = "https://prf-panel.vercel.app"
+        const val DEFAULT_SERVER = Endpoint.defaultServer
 
         @Volatile private var instance: Prefs? = null
 
