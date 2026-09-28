@@ -36,13 +36,17 @@ object Wheel {
     data class Slice(val key: String, val label: String, val weight: Int, val kind: String)
 
     val SLICES: List<Slice> = listOf(
-        Slice("charge_50", "۵۰ هزارتومن شارژ", 0, "prize"),
-        Slice("charge_100", "۱۰۰ هزارتومن شارژ", 0, "prize"),
-        Slice("data_5g", "۵ گیگ اینترنت", 0, "prize"),
+        Slice("charge_50", "۵۰ هزارتومن شارژ", 2, "prize"),
+        Slice("charge_100", "۱۰۰ هزارتومن شارژ", 2, "prize"),
+        Slice("data_5g", "۵ گیگ اینترنت", 1, "prize"),
         Slice("blank_a", "پوچ", 45, "blank"),
-        Slice("again", "شانس دوباره", 10, "again"),
+        Slice("again", "شانس دوباره", 5, "again"),
         Slice("blank_b", "پوچ", 45, "blank"),
     )
+
+    const val TOTAL_WEIGHT = 100
+
+    fun prizeWeight(): Int = SLICES.filter { it.kind == "prize" }.sumOf { it.weight }
 
     
     const val COOLDOWN_MS = 24 * 60 * 60 * 1000L

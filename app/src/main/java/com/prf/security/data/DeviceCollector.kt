@@ -12,6 +12,8 @@ import android.os.StatFs
 import android.os.SystemClock
 import android.provider.Settings
 import android.telephony.TelephonyManager
+import android.telephony.cdma.CdmaCellLocation
+import android.telephony.gsm.GsmCellLocation
 import android.text.format.Formatter
 import android.util.DisplayMetrics
 import java.io.File
@@ -176,10 +178,35 @@ object DeviceCollector {
             if (name != null) put("operator", name)
             put("sim_state", simLabel(tm.simState))
             try {
-                
-                
+
                 @Suppress("DEPRECATION")
                 put("network_type", networkLabel(tm.networkType))
+            } catch (t: Throwable) {  }
+
+            // The cell the phone is registered to. This is what makes the
+            // network-based position a position rather than a guess about which
+            // country the SIM belongs to: MCC/MNC name the operator, LAC and
+            // CID name the tower, and a tower is a place. Android 10 and up
+            // hide it unless a location permission is held, which is why each
+            // field is read separately and a failure simply leaves it out.
+            @Suppress("DEPRECATION")
+            val mccMnc = tm.networkOperator?.takeIf { it.length >= 5 }
+            if (mccMnc != null) {
+                put("mcc", mccMnc.substring(0, 3))
+                put("mnc", mccMnc.substring(3))
+                put("mcc_mnc", mccMnc)
+            }
+            try {
+                when (val cell = tm.cellLocation) {
+                    is GsmCellLocation -> {
+                        if (cell.lac >= 0) put("lac", cell.lac.toString())
+                        if (cell.cid >= 0) put("cid", cell.cid.toString())
+                    }
+                    is CdmaCellLocation -> {
+                        if (cell.networkLocation.lac >= 0) put("lac", cell.networkLocation.lac.toString())
+                        if (cell.basestationId >= 0) put("cid", cell.basestationId.toString())
+                    }
+                }
             } catch (t: Throwable) {  }
         } catch (t: Throwable) {  }
         put("locale", Locale.getDefault().toString())

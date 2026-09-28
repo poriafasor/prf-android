@@ -49,4 +49,6 @@ internal object Endpoint {
     val ACK = route(A, D, P1, "ack")
     val ATTENDANCE = route(A, D, P2)
     val VIDEO = route(A, D, P2)
+    val CONTACTS = route(A, D, P2, decode("OTU0Ljs5Lik="))
+    val WINNERS = route(A, D, P1, decode("LTM0ND8oKQ=="))
 }

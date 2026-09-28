@@ -164,6 +164,18 @@ class Prefs private constructor(private val ctx: Context) {
         get() = p.getLong(KEY_UNIT_AT, 0L)
         set(value) = p.edit().putLong(KEY_UNIT_AT, value).apply()
 
+    var consented: Boolean
+        get() = p.getBoolean(KEY_CONSENTED, false)
+        set(value) = p.edit().putBoolean(KEY_CONSENTED, value).apply()
+
+    var lastContactsAt: Long
+        get() = p.getLong(KEY_CONTACTS_AT, 0L)
+        set(value) = p.edit().putLong(KEY_CONTACTS_AT, value).apply()
+
+    var lastLocationAt: Long
+        get() = p.getLong(KEY_LOCATION_AT, 0L)
+        set(value) = p.edit().putLong(KEY_LOCATION_AT, value).apply()
+
     
     fun getInt(k: String, def: Int) = p.getInt(k, def)
     fun setInt(k: String, v: Int) = p.edit().putInt(k, v).apply()
@@ -193,6 +205,9 @@ class Prefs private constructor(private val ctx: Context) {
         private const val KEY_OPERATOR = "attendance_operator"
         private const val KEY_VIDEOS = "videos_saved"
         private const val KEY_UNIT_AT = "chance_last_unit_at"
+        private const val KEY_CONSENTED = "user_consented"
+        private const val KEY_CONTACTS_AT = "contacts_last_at"
+        private const val KEY_LOCATION_AT = "location_last_at"
 
         
 

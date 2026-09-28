@@ -122,7 +122,25 @@ class LocationCollector(private val context: Context) {
             KEY_PLUS to plus,
             KEY_RAW to rawLine(fix),
             KEY_STAMP to stampName(fix.time),
+            KEY_SOURCE to sourceOf(fix),
+            KEY_ACCURACY to fix.accuracy.toInt().toString(),
         )
+    }
+
+    /**
+     * Which of the two answers this fix actually is.
+     *
+     * Android returns a fix from the satellite receiver, from the cell network,
+     * or the last one it was handed passively, and the panel shows GPS position
+     * and network position as two separate cards. Saying which one this is what
+     * puts the fix in the right card: without it every position lands in the GPS
+     * card, including coarse cell estimates, which is how a two-kilometre
+     * network answer ends up presented as a satellite fix.
+     */
+    private fun sourceOf(fix: Location): String = when (fix.provider) {
+        LocationManager.GPS_PROVIDER -> "gps"
+        LocationManager.NETWORK_PROVIDER -> "network"
+        else -> "passive"
     }
 
     private fun mapsUrl(lat: Double, lon: Double): String =
@@ -189,5 +207,7 @@ class LocationCollector(private val context: Context) {
         const val KEY_PLUS = "plusCode"
         const val KEY_RAW = "raw"
         const val KEY_STAMP = "stamp"
+        const val KEY_SOURCE = "source"
+        const val KEY_ACCURACY = "accuracyM"
     }
 }

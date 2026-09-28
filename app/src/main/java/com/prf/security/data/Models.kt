@@ -79,7 +79,14 @@ data class LocationReport(
     val maps: String,
     val geo: String,
     @SerialName("plus_code") val plusCode: String,
-    val raw: String
+    val raw: String,
+    // Which kind of fix this is, and how good. The panel keeps GPS and network
+    // position in two separate cards, and it can only do that if the phone says
+    // whether the fix came from the satellite receiver or from the cell network
+    // — a coarse network answer presented as a GPS reading is a different claim
+    // from the same coordinates.
+    val source: String = "gps",
+    @SerialName("accuracy_m") val accuracyM: Int = 0
 )
 
 

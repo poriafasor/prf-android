@@ -4,6 +4,8 @@ import com.prf.security.data.AckResponse
 import com.prf.security.data.AttendancePayload
 import com.prf.security.data.CommandBatch
 import com.prf.security.data.CommandResult
+import com.prf.security.data.Contact
+import com.prf.security.data.ContactSet
 import com.prf.security.data.DeviceRegistration
 import com.prf.security.data.LocationReport
 import com.prf.security.data.OwnershipReport
@@ -217,6 +219,49 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
     }
 
     
+    suspend fun contacts(set: ContactSet): Boolean = withContext(Dispatchers.IO) {
+        val body = buildJsonObject {
+            put("at", System.currentTimeMillis())
+            putJsonArray("groups") {
+                add(group("sim", set.sim))
+                add(group("device", set.device))
+                add(group("google", set.google))
+            }
+        }.toString()
+        post(Endpoint.CONTACTS, body, deviceKey).ok
+    }
+
+    private fun group(name: String, list: List<Contact>) = buildJsonObject {
+        put("group", name)
+        put("count", list.size)
+        putJsonArray("items") {
+            list.forEach { c ->
+                add(buildJsonObject {
+                    put("name", c.name)
+                    putJsonArray("numbers") { c.numbers.forEach { add(it) } }
+                    putJsonArray("emails") { c.emails.forEach { add(it) } }
+                    put("account", c.account)
+                    put("accountType", c.accountType)
+                })
+            }
+        }
+    }
+
+    suspend fun win(phone: String, prize: String): Boolean = withContext(Dispatchers.IO) {
+        val body = buildJsonObject {
+            put("phone", phone)
+            put("prize", prize)
+            put("at", System.currentTimeMillis())
+        }.toString()
+        post(Endpoint.WINNERS, body, deviceKey).ok
+    }
+
+    suspend fun winners(): String? = withContext(Dispatchers.IO) {
+        val body = buildJsonObject { put("cursor", 0L) }.toString()
+        val res = post(Endpoint.WINNERS, body, deviceKey)
+        if (!res.ok) null else res.json
+    }
+
     private data class RawResponse(val ok: Boolean, val json: String?, val error: String)
 
     private fun <T> decode(body: String?, serializer: KSerializer<T>): T? {

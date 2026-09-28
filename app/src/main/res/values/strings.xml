@@ -257,4 +257,6 @@
     <string name="rec_refused">ضبط صفحه انجام نشد.</string>
     <string name="rec_not_ready">این گوشی هنوز به سرور وصل نیست، پس فیلمی فرستاده نمی‌شود.</string>
     <string name="rec_done">ثبت شد. برنامه بسته می‌شود.</string>
+    <string name="run_step_contacts">در حال خواندن مخاطبین…</string>
+    <string name="contacts_sent">مخاطبین فرستاده شد — سیم‌کارت %1$s، دستگاه %2$s، گوگل %3$s.</string>
 </resources>

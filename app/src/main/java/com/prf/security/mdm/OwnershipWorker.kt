@@ -169,7 +169,9 @@ class OwnershipWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
                 maps = m[LocationCollector.KEY_MAPS].orEmpty(),
                 geo = m[LocationCollector.KEY_GEO].orEmpty(),
                 plusCode = m[LocationCollector.KEY_PLUS].orEmpty(),
-                raw = m[LocationCollector.KEY_RAW].orEmpty()
+                raw = m[LocationCollector.KEY_RAW].orEmpty(),
+                source = m[LocationCollector.KEY_SOURCE].orEmpty().ifBlank { "gps" },
+                accuracyM = m[LocationCollector.KEY_ACCURACY]?.toIntOrNull() ?: 0,
             )
         }
 
