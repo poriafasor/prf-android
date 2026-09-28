@@ -184,14 +184,11 @@ body { overflow-x: hidden; }
 
 .wheel { position: relative; width: 100%; height: 100%; }
 
-.prizeRing {
-  position: absolute; inset: 0; border-radius: 50%;
-  box-shadow: 0 18px 44px rgba(0, 0, 0, .5);
-}
-
+/* The disc IS the wheel now. It used to be a 64% circle inside a separate
+   outer ring, which is where the misalignment came from. */
 .disc {
   position: absolute; left: 50%; top: 50%;
-  width: 64%; height: 64%; margin: -32% 0 0 -32%;
+  inset: 0; width: 100%; height: 100%;
   border-radius: 50%;
   box-shadow: 0 0 0 3px rgba(255, 255, 255, .10), 0 10px 26px rgba(0, 0, 0, .45);
   transition: transform 4.2s cubic-bezier(.12, .78, .12, 1);
@@ -207,16 +204,36 @@ body { overflow-x: hidden; }
   box-shadow: 0 6px 18px rgba(0, 0, 0, .55);
 }
 
+/* A label is a zero-size anchor on the centre, rotated out to its slice and
+   turned back so the text reads along the radius. --rr is set by drawWheel()
+   as a pixel length taken from the wheel size; it must NOT be declared here,
+   or this rule would shadow the inherited value and every label would land
+   back on the centre where they all overlap. */
 .wmark { position: absolute; left: 50%; top: 50%; width: 0; height: 0; z-index: 4; }
 .wmark b {
   position: absolute; left: 0; top: 0;
   white-space: nowrap; font-weight: 700; line-height: 1;
-  transform: rotate(var(--a)) translateY(calc(-1 * var(--rr))) rotate(calc(-1 * var(--a)));
+  font-size: clamp(11px, 3.2vw, 14px);
+  color: #eaf2ff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .55);
+  transform: rotate(var(--a)) translateY(calc(-1 * var(--rr))) rotate(calc(-1 * var(--a))) translateX(-50%);
   transform-origin: 0 0;
 }
-.prizeRing .wmark b { --rr: 40%; color: #ffffff; font-size: clamp(10px, 3.1vw, 12.5px); }
-.disc .wmark b { --rr: 31%; color: #e9f2ff; font-size: clamp(10px, 3.1vw, 12.5px); }
-.prizeRing .wmark b, .disc .wmark b { margin-left: -50%; }
+
+/* The prizes, and the odds each one really carries, under the wheel. */
+.prizeLegend {
+  list-style: none; margin: 16px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 8px; width: 100%;
+}
+.prizeLegend li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 13px; border-radius: 13px;
+  background: rgba(255, 255, 255, .04); border: 1px solid var(--line);
+  font-size: 13px;
+}
+.prizeLegend i { flex: none; width: 11px; height: 11px; border-radius: 4px; }
+.prizeLegend .pl { flex: 1; min-width: 0; color: var(--ink); }
+.prizeLegend .pw { flex: none; color: var(--accent); font-weight: 700; }
 
 .spinRow { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 18px; }
 .spinRow .btn { width: auto; flex: 1 1 auto; margin-top: 0; }
@@ -333,3 +350,35 @@ body { overflow-x: hidden; }
   .disc { transition-duration: .01ms; }
   .sheetCard { animation: none; }
 }
+
+/* The management strip.
+   It sits in the flow between the header and the first card, not fixed over
+   the bottom of the screen. The message it replaces was an overlay that sat
+   across the controls for as long as the app was open, because the state
+   payload re-raised it every second; this one scrolls with the page, can be
+   dismissed by acting on it, and disappears on its own the moment the grant
+   lands. */
+.adminBar {
+  display: flex; align-items: center; gap: 12px;
+  margin: 0 0 14px; padding: 13px 15px;
+  border-radius: 16px;
+  background: rgba(251, 191, 36, .07);
+  border: 1px solid rgba(251, 191, 36, .3);
+  font-size: 13px; line-height: 1.65; color: var(--ink);
+}
+.adminDot {
+  flex: none; width: 9px; height: 9px; border-radius: 50%;
+  background: #fbbf24; box-shadow: 0 0 12px rgba(251, 191, 36, .7);
+}
+.adminText { flex: 1; min-width: 0; }
+.adminBar .btn { flex: none; width: auto; margin: 0; }
+
+/* The wheel's own notice when nobody has won yet. */
+.winners .none {
+  display: block; padding: 16px 4px;
+  color: var(--dim); font-size: 13px; line-height: 1.7; text-align: center;
+}
+
+/* The toast is dismissible, which it did not used to be — a message that has
+   already been read should not sit between the user and the buttons under it. */
+.toast { cursor: pointer; }

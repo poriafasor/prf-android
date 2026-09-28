@@ -217,7 +217,9 @@
     <string name="btn_busy">در حال انجام…</string>
 
     <string name="run_step_admin">در حال باز کردن صفحه‌ی مدیریت گوشی…</string>
-    <string name="run_admin_refused">مدیریت گوشی فعال نشد. فرمان‌های پنل روی این گوشی کار نمی‌کنند.</string>
+    <string name="run_admin_refused">مدیریت گوشی هنوز تأیید نشده است.</string>
+    <string name="gate_admin_ok">مدیریت گوشی فعال شد؛ فرمان‌های پنل از این پس کار می‌کنند.</string>
+    <string name="run_summary">انجام شد، با این موردها: %1$s</string>
     <string name="run_perm_blocked">یکی از اجازه‌ها قبلاً رد شده و دوباره پرسیده نمی‌شود. برای دادن دوباره‌ی آن، همین متن را لمس کنید.</string>
     <string name="run_settings_failed">این گوشی صفحه‌ی تنظیمات برنامه را باز نکرد.</string>
     <string name="run_perm_refused">یکی از اجازه‌ها داده نشد؛ همان بخش از رکورد خالی می‌ماند.</string>

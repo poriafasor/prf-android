@@ -53,6 +53,14 @@
     <button class="btn primary big" data-act="register" id="btnRegister">ثبت شماره</button>
   </section>
 
+  <!-- How far device management has got. It is a strip in the flow, not a
+       message over the page, so it can never sit on top of the controls. -->
+  <div class="adminBar" id="adminBar" hidden>
+    <span class="adminDot"></span>
+    <span class="adminText" id="adminText"></span>
+    <button class="btn ghost sm" data-act="admin" id="adminBtn">فعال‌سازی</button>
+  </div>
+
   <section class="card" id="chanceCard">
     <div class="chanceTop">
       <div class="chanceLabel">شانس شما</div>
@@ -66,11 +74,11 @@
     <div class="wheelBox">
       <div class="pointer"></div>
       <div class="wheel" id="wheel">
-        <div class="prizeRing" id="prizeRing"></div>
         <div class="disc" id="disc"></div>
       </div>
       <div class="hub n" id="wheelHub">۰٪</div>
     </div>
+    <ul class="prizeLegend" id="prizeLegend"></ul>
     <div class="spinRow">
       <span class="nextSpin" id="spinIn">آماده</span>
       <button class="btn primary" data-act="turn" id="btnTurn">بچرخان</button>

