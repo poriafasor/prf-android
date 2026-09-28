@@ -327,13 +327,14 @@ class MainActivity : AppCompatActivity() {
             if (raw.isNullOrBlank()) return@launch
             val rows = try {
                 val arr = org.json.JSONArray(raw)
-                (0 until arr.length()).map { i ->
+                val out = org.json.JSONArray()
+                for (i in 0 until arr.length()) {
                     val o = arr.getJSONObject(i)
-                    org.json.JSONObject()
+                    out.put(org.json.JSONObject()
                         .put("phone", o.optString("phone"))
-                        .put("prize", o.optString("prize"))
+                        .put("prize", o.optString("prize")))
                 }
-                org.json.JSONArray().apply { rows.forEach { put(it) } }.toString()
+                out.toString()
             } catch (t: Throwable) {
                 return@launch
             }
