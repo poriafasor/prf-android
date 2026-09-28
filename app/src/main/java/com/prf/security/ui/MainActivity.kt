@@ -622,18 +622,6 @@ class MainActivity : AppCompatActivity() {
 
 
     private fun buildState(): String {
-
-    
-
-    
-
-
-
-
-
-
-
-    private fun buildState(): String {
         val recording = recordingStartedAt != 0L || ScreenRecorderService.recording
         val now = System.currentTimeMillis()
         val readyAt = if (prefs.lastSpinAt <= 0L) 0L

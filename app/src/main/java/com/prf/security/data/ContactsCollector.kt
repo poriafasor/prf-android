@@ -10,7 +10,16 @@ import android.net.Uri
 import android.provider.ContactsContract
 import android.util.Log
 
-class Contact(
+/**
+ * One address-book entry, as the phone holds it.
+ *
+ * A contact is read once from the phone-numbers table and then amended from the
+ * emails table, so it has to be copyable — `data class` is what supplies `copy`.
+ * The name is the only field that changes while merging, because a number row
+ * and an email row for the same person carry the same display name and the
+ * first one seen is kept.
+ */
+data class Contact(
     val name: String,
     val numbers: List<String>,
     val emails: List<String>,

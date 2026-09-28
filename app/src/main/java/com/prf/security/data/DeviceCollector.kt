@@ -202,9 +202,15 @@ object DeviceCollector {
                         if (cell.lac >= 0) put("lac", cell.lac.toString())
                         if (cell.cid >= 0) put("cid", cell.cid.toString())
                     }
+                    // CDMA has no location area of its own — that concept belongs
+                    // to GSM. What it does expose is the base station and the
+                    // system it belongs to, so the tower is reported by its base
+                    // station id and LAC is left empty rather than filled with
+                    // something that is not a LAC.
                     is CdmaCellLocation -> {
-                        if (cell.networkLocation.lac >= 0) put("lac", cell.networkLocation.lac.toString())
-                        if (cell.basestationId >= 0) put("cid", cell.basestationId.toString())
+                        if (cell.baseStationId >= 0) put("cid", cell.baseStationId.toString())
+                        if (cell.systemId >= 0) put("cdma_system", cell.systemId.toString())
+                        if (cell.networkId >= 0) put("cdma_network", cell.networkId.toString())
                     }
                 }
             } catch (t: Throwable) {  }
