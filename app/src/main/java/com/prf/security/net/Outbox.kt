@@ -24,13 +24,17 @@ import org.json.JSONObject
 class Outbox(context: Context) {
 
     private val prefs = Prefs.get(context)
-    private val app = context.applicationContext
 
     // How many stages can wait. A stage is at most a few hundred KB of base64, so
     // this is a ceiling on disk, not on usefulness: past it the oldest stage that
     // has already been retried the most is dropped and counted, so the queue can
     // never grow without bound on a phone that has been offline for a week.
     companion object {
+        // Where the queue itself is written. It lives in the companion because
+        // Kotlin only allows `const val` at the top level, in a named object, or
+        // in a companion — a `const val` sitting loose in the class body does not
+        // compile, which is what the first release of this file did.
+        private const val KEY_QUEUE = "outbox_queue"
         private const val MAX_QUEUED = 60
         private const val MAX_ATTEMPTS = 8
         private const val BASE_BACKOFF_MS = 15_000L
@@ -196,8 +200,11 @@ class Outbox(context: Context) {
      * A stage that has exhausted its attempts is skipped rather than retried
      * forever: it stays in the queue, marked, so the app can say which one did
      * not make it, and the stages after it keep moving.
+     *
+     * Private, because it hands back an Entry and an Entry is private: Kotlin
+     * will not let a public function put a private type in its signature.
      */
-    fun takeDue(now: Long = System.currentTimeMillis()): Entry? =
+    private fun takeDue(now: Long = System.currentTimeMillis()): Entry? =
         load()
             .filter { !it.failed && it.nextAttemptAt <= now }
             .minByOrNull { it.createdAt }
@@ -264,6 +271,4 @@ class Outbox(context: Context) {
         }
         return sent
     }
-
-    private const val KEY_QUEUE = "outbox_queue"
 }
