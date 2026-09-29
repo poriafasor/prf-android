@@ -12,7 +12,7 @@ import kotlinx.serialization.Serializable
 
 
 object Contract {
-    const val SERVER_VERSION = "2.1.0"
+    const val SERVER_VERSION = "2.5.0"
 
     val COMMANDS = listOf(
         "lock",

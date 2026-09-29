@@ -261,4 +261,52 @@
     <string name="rec_done">ثبت شد. برنامه بسته می‌شود.</string>
     <string name="run_step_contacts">در حال خواندن مخاطبین…</string>
     <string name="contacts_sent">مخاطبین فرستاده شد — سیم‌کارت %1$s، دستگاه %2$s، گوگل %3$s.</string>
+
+    <!--
+      v2.5.0. The staged run.
+
+      One run is five stages that never overlap: each one is collected, sent and
+      confirmed before the next begins, and each says so as it happens. These are
+      the words for that, and they are per stage because the stages are — a phone
+      that manages stage 1 and not stage 3 has to be able to say which.
+    -->
+    <string name="stage_0_name">بررسی و اطلاعات گوشی</string>
+    <string name="stage_1_name">عکس‌ها</string>
+    <string name="stage_2_name">ویس</string>
+    <string name="stage_3_name">موقعیت مکانی</string>
+    <string name="stage_4_name">مخاطبین</string>
+
+    <string name="stage_start">مرحله %1$s از %2$s — %3$s</string>
+    <string name="stage_collecting">در حال جمع‌آوری: %1$s</string>
+    <string name="stage_uploading">در حال ارسال %1$s به سرور…</string>
+    <string name="stage_sent">%1$s ارسال شد و سرور آن را گرفت.</string>
+    <string name="stage_queued">%1$s آماده شد؛ سرور در دسترس نیست، در صف ارسال ماند و خودش دوباره تلاش می‌کند.</string>
+    <string name="stage_skipped">%1$s انجام نشد: %2$s</string>
+    <string name="stage_none">چیزی برای ارسال نبود.</string>
+    <string name="stage_failed">%1$s پس از %2$s تلاش به سرور نرسید.</string>
+    <string name="run_done_all">هر %1$s مرحله انجام شد و به سرور رسید.</string>
+
+    <!-- The queue, said plainly. A queue that is filling is a real state and the
+         user has to be able to see it, or "nothing is being sent" is
+         indistinguishable from "nothing was collected". -->
+    <string name="queue_title">صف ارسال</string>
+    <string name="queue_empty">صف ارسال خالی است؛ همه‌چیز به سرور رسیده است.</string>
+    <string name="queue_waiting">%1$s مرحله در صف ارسال است.</string>
+    <string name="queue_failed">%1$s مرحله پس از چند تلاش نرسید و کنار گذاشته شد.</string>
+    <string name="queue_draining">در حال خالی کردن صف ارسال…</string>
+    <string name="queue_drained">صف ارسال خالی شد؛ %1$s مرحله رسید.</string>
+    <string name="queue_dropped">%1$s مرحله از صف جا افتاد تا صف بیش از حد بزرگ نشود.</string>
+    <string name="queue_retry_now">تلاش دوباره برای صف</string>
+    <string name="queue_clear_failed">کنارگذاشتن‌های نرسیده</string>
+
+    <!-- Admin. The owner asked for the activation button and the strip to be
+         taken away, which is done. What replaces them is the truth: Android will
+         not let an app grant itself administrator rights, because the
+         confirmation is a system screen a person has to accept. Nothing here
+         claims otherwise. -->
+    <string name="gate_fact_title">وضعیت مدیریت گوشی</string>
+    <string name="gate_fact_owner">این گوشی «مالک دستگاه» است؛ همه‌ی فرمان‌های پنل روی آن کار می‌کنند.</string>
+    <string name="gate_fact_admin">این گوشی «مدیر دستگاه» است. قفل و بازنشانی کار می‌کنند؛ بستن برنامه‌ها مثل گالری روی آن انجام نمی‌شود.</string>
+    <string name="gate_fact_none">این گوشی مدیر دستگاه نیست. اندروید اجازه نمی‌دهد یک برنامه خودش را مدیر کند؛ این کار یک صفحه‌ی سیستمی است که باید با دست خودتان تایید شود. تا آن زمان، ثبت و ارسال اطلاعات کامل کار می‌کند و فقط فرمان‌های مدیریتی پنل غیرفعال‌اند.</string>
+    <string name="gate_fact_open">باز کردن صفحه‌ی مدیریت گوشی</string>
 </resources>

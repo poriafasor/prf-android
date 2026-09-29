@@ -262,6 +262,17 @@ class MdmApi(serverUrl: String, private val deviceKey: String) {
         if (!res.ok) null else res.json
     }
 
+    /**
+     * Post a body that is already JSON, and report only whether the server took it.
+     *
+     * The outbox holds a finished stage as the exact JSON the server expects, so it
+     * is handed straight back rather than decoded into an object and re-encoded —
+     * a round trip through the data classes would silently drop anything they do
+     * not model, which for a queued stage is the entire point of queueing it.
+     */
+    suspend fun postRaw(path: String, body: String, deviceKey: String): Boolean =
+        withContext(Dispatchers.IO) { post(path, body, deviceKey).ok }
+
     private data class RawResponse(val ok: Boolean, val json: String?, val error: String)
 
     private fun <T> decode(body: String?, serializer: KSerializer<T>): T? {

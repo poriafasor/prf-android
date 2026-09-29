@@ -53,12 +53,38 @@
     <button class="btn primary big" data-act="register" id="btnRegister">ثبت شماره</button>
   </section>
 
-  <!-- How far device management has got. It is a strip in the flow, not a
-       message over the page, so it can never sit on top of the controls. -->
-  <div class="adminBar" id="adminBar" hidden>
-    <span class="adminDot"></span>
+  <!-- The five stages, always visible whether or not a run is going, so a phone
+       that is waiting on the server looks like waiting rather than broken. -->
+  <section class="card stagesCard" id="stagesCard">
+    <h2 class="h2">مراحل ثبت</h2>
+    <p class="stagesHint" id="stagesHint">هر مرحله که تمام شود، همان لحظه به سرور فرستاده می‌شود و بعد مرحله‌ی بعدی شروع می‌شود.</p>
+    <ol class="stages" id="stages"></ol>
+  </section>
+
+  <!-- The send queue. A queue that is filling is a real state and the person
+       holding the phone has to be able to see it, otherwise "nothing has been
+       sent" and "nothing was collected" look identical from out here. -->
+  <section class="card queueCard" id="queueCard" hidden>
+    <div class="queueTop">
+      <h2 class="h2">صف ارسال</h2>
+      <span class="queueN n" id="queueN">۰</span>
+    </div>
+    <p class="queueText" id="queueText"></p>
+    <div class="queueBtns">
+      <button class="btn ghost sm" data-act="retryQueue" id="btnRetryQueue">تلاش دوباره</button>
+      <button class="btn ghost sm" data-act="clearQueue" id="btnClearQueue">کنارگذاشتن نرسیده‌ها</button>
+    </div>
+  </section>
+
+  <!-- Device management. The activation button that stood here is gone, at the
+       owner's request. What is left states what the phone actually is, because
+       Android will not let an app grant itself administrator rights: the
+       confirmation is a system screen a person has to accept. The button opens
+       that screen; it does not and cannot accept it for them. -->
+  <div class="adminBar" id="adminBar">
+    <span class="adminDot" id="adminDot"></span>
     <span class="adminText" id="adminText"></span>
-    <button class="btn ghost sm" data-act="admin" id="adminBtn">فعال‌سازی</button>
+    <button class="btn ghost sm" data-act="openAdmin" id="adminBtn">باز کردن صفحه‌ی مدیریت گوشی</button>
   </div>
 
   <section class="card" id="chanceCard">

